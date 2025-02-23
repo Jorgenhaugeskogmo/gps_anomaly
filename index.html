@@ -10,10 +10,247 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
-        /* Kopier inn all CSS fra den forrige index.html her */
+        :root {
+            --primary: #2196F3;
+            --success: #4CAF50;
+            --warning: #FFA000;
+            --error: #f44336;
+            --background: #f8f9fa;
+            --card: #ffffff;
+            --text: #1a1a1a;
+            --border-radius: 12px;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            line-height: 1.5;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .container {
+            display: grid;
+            gap: 2rem;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            background: linear-gradient(45deg, var(--primary), #64B5F6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .card {
+            background: var(--card);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            transition: transform 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .upload-form {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            flex: 1;
+        }
+
+        #fileInput {
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            background: var(--background);
+            border: 2px dashed #ccc;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .file-input-label:hover {
+            border-color: var(--primary);
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        #map {
+            height: 600px;
+            width: 100%;
+            border-radius: var(--border-radius);
+            z-index: 1;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-box {
+            padding: 1.5rem;
+            background: var(--card);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            transition: transform 0.2s ease;
+        }
+
+        .stat-box:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-box h3 {
+            font-size: 0.875rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-box p {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .message {
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: var(--border-radius);
+            animation: slideIn 0.3s ease;
+        }
+
+        .message.error {
+            background-color: #ffebee;
+            border: 1px solid #ffcdd2;
+            color: var(--error);
+        }
+
+        .message.success {
+            background-color: #e8f5e9;
+            border: 1px solid #c8e6c9;
+            color: var(--success);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .chart-container {
+            background: var(--card);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin: 1rem 0;
+            height: 500px;
+        }
+
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), #64B5F6);
+            animation: loading 2s ease-in-out infinite;
+            z-index: 1000;
+            display: none;
+        }
+
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
     </style>
 </head>
 <body>
+    <div class="loading" id="loading"></div>
+    <div class="container">
+        <header class="header">
+            <h1>GPS Tracker</h1>
+        </header>
+
+        <div class="card">
+            <div class="upload-form">
+                <div class="file-input-wrapper">
+                    <div class="file-input-label">
+                        <span id="fileLabel">Velg NMEA eller CSV-fil</span>
+                    </div>
+                    <input type="file" id="fileInput" accept=".txt,.nmea,.csv">
+                </div>
+                <button onclick="uploadFile()">Last opp</button>
+            </div>
+        </div>
+
+        <div id="message" class="message" style="display: none;"></div>
+        <div id="stats" class="stats"></div>
+        
+        <div class="chart-container">
+            <canvas id="speedChart"></canvas>
+        </div>
+        
+        <div id="map" class="card"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
         function parseNMEA(text) {
             const lines = text.split('\n');
@@ -123,6 +360,189 @@
 
             reader.readAsText(file);
         }
+
+        // Initialiser kartet
+        let map = L.map('map').setView([63.4305, 10.3951], 5);  // Sentrer på Norge
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        let markers = [];  // Hold styr på alle markører
+        let speedChart = null;
+
+        function clearMap() {
+            markers.forEach(marker => marker.remove());
+            markers = [];
+        }
+
+        function formatSpeed(speed) {
+            return speed.toFixed(1) + ' km/t';
+        }
+
+        function createSpeedChart(points) {
+            const ctx = document.getElementById('speedChart').getContext('2d');
+            
+            if (speedChart) {
+                speedChart.destroy();
+            }
+            
+            // Beregn avvik
+            const deviations = points.map(p => p.deviation);
+
+            speedChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: points.map((_, i) => i + 1),
+                    datasets: [{
+                        label: 'Avvik fra gjennomsnitt (meter)',
+                        data: deviations,
+                        borderColor: 'rgb(33, 150, 243)',
+                        backgroundColor: points.map(p => 
+                            p.is_anomaly ? 'rgba(244, 67, 54, 0.5)' : 'rgba(33, 150, 243, 0.1)'
+                        ),
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        zoom: {
+                            pan: {
+                                enabled: true,
+                                mode: 'x',
+                                modifierKey: 'ctrl',
+                            },
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'x',
+                                drag: {
+                                    enabled: true,
+                                    backgroundColor: 'rgba(33, 150, 243, 0.2)',
+                                    borderColor: 'rgb(33, 150, 243)',
+                                    borderWidth: 1
+                                }
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: [
+                                'Posisjonsavvik fra gjennomsnitt',
+                                'Dra for å zoome, Ctrl+dra for å panorere, dobbeltklikk for å nullstille'
+                            ],
+                            font: {
+                                size: 16,
+                                family: "'Inter', sans-serif"
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const point = points[context.dataIndex];
+                                    return [
+                                        `Avvik: ${deviations[context.dataIndex].toFixed(1)} meter`,
+                                        `Status: ${point.is_anomaly ? 'Anomali' : 'Normal'}`,
+                                        `Tid: ${point.time}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Avvik (meter)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Punktnummer'
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                }
+            });
+        }
+
+        function updateMap(points) {
+            clearMap();
+            
+            const latlngs = points.map(point => [point.lat, point.lon]);
+            
+            // Tegn linje mellom punktene
+            const polyline = L.polyline(latlngs, {
+                color: 'blue',
+                weight: 3,
+                opacity: 0.7
+            }).addTo(map);
+            markers.push(polyline);
+            
+            // Legg til markører for hvert punkt
+            points.forEach((point, index) => {
+                const marker = L.circleMarker([point.lat, point.lon], {
+                    radius: 6,
+                    fillColor: point.is_anomaly ? '#f44336' : // Rød for anomalier
+                              index === 0 ? '#4CAF50' : // Grønn for start
+                              index === points.length - 1 ? '#FFA000' : // Oransje for slutt
+                              '#2196F3', // Blå for normale punkter
+                    color: '#fff',
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map);
+                
+                marker.bindPopup(`
+                    <strong>${point.is_anomaly ? 'ANOMALI' : 'Normalt punkt'}</strong><br>
+                    Punkt ${index + 1} av ${points.length}<br>
+                    Tid: ${point.time}<br>
+                    Lat: ${point.lat.toFixed(6)}<br>
+                    Lon: ${point.lon.toFixed(6)}
+                `);
+                
+                markers.push(marker);
+            });
+            
+            // Zoom til alle punktene
+            map.fitBounds(latlngs);
+        }
+
+        function updateStats(points) {
+            const anomalies = points.filter(p => p.is_anomaly).length;
+            
+            document.getElementById('stats').innerHTML = `
+                <div class="stat-box">
+                    <h3>Totalt antall punkter</h3>
+                    <p>${points.length}</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Antall anomalier</h3>
+                    <p>${anomalies}</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Maksimalt avvik</h3>
+                    <p>${Math.max(...points.map(p => p.deviation)).toFixed(1)}m</p>
+                </div>
+            `;
+        }
+
+        // Update file input label
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name || 'Velg NMEA eller CSV-fil';
+            document.getElementById('fileLabel').textContent = fileName;
+        });
     </script>
 </body>
 </html> 
