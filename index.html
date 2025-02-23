@@ -253,28 +253,35 @@
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
         function convertNMEAtoDecimal(value, direction) {
-            if (!value) return NaN;
+            if (!value || !direction) {
+                console.log('Manglende verdi eller retning:', { value, direction });
+                return NaN;
+            }
             
             try {
-                // NMEA format: ddmm.mmmm (grader + minutter)
-                const degrees = parseFloat(value.slice(0, 2));
-                const minutes = parseFloat(value.slice(2)) / 60.0;
-                let decimal = degrees + minutes;
+                console.log('Konverterer:', { value, direction });
                 
-                // For lengdegrad (longitude), formatet er dddmm.mmmm
+                // For breddegrad (5947.6712 -> 59.794520)
+                let degrees = parseFloat(value.slice(0, 2));
+                let minutes = parseFloat(value.slice(2)) / 60.0;
+                
+                // For lengdegrad (01025.2748 -> 10.421247)
                 if (direction === 'E' || direction === 'W') {
-                    decimal = parseFloat(value.slice(0, 3)) + parseFloat(value.slice(3)) / 60.0;
+                    degrees = parseFloat(value.slice(0, 3));
+                    minutes = parseFloat(value.slice(3)) / 60.0;
                 }
+                
+                let decimal = degrees + minutes;
                 
                 // Juster for S/W retning
                 if (direction === 'S' || direction === 'W') {
                     decimal = -decimal;
                 }
                 
-                console.log(`Konverterer ${value} ${direction} til ${decimal}`);
+                console.log('Konvertert til:', decimal);
                 return decimal;
             } catch (e) {
-                console.log('Feil i konvertering:', value, direction, e);
+                console.error('Feil i konvertering:', e);
                 return NaN;
             }
         }
@@ -283,48 +290,55 @@
             const lines = text.split('\n');
             const points = [];
             
+            console.log('Starter NMEA parsing...');
+            console.log('Antall linjer:', lines.length);
+            
             for (const line of lines) {
                 try {
-                    // Fokuser på GGA og RMC meldinger som inneholder posisjonsdata
-                    if (line.startsWith('$GNGGA') || line.startsWith('$GNRMC')) {
+                    if (line.startsWith('$GNGGA')) {
+                        console.log('GNGGA linje funnet:', line);
                         const parts = line.split(',');
+                        console.log('Deler:', parts);
                         
-                        // GNGGA format: $GNGGA,time,lat,N/S,lon,E/W,fix,sats,hdop,alt,M,...
-                        if (line.startsWith('$GNGGA') && parts.length >= 10) {
-                            const lat = convertNMEAtoDecimal(parts[2], parts[3]);
-                            const lon = convertNMEAtoDecimal(parts[4], parts[5]);
+                        // GNGGA format: $GNGGA,202423.000,5947.6712,N,01025.2748,E,2,13,0.75,181.8,M,40.9,M,,*7B
+                        if (parts.length >= 10) {
+                            const lat = parts[2];
+                            const latDir = parts[3];
+                            const lon = parts[4];
+                            const lonDir = parts[5];
                             
-                            if (!isNaN(lat) && !isNaN(lon)) {
+                            console.log('Rådata:', { lat, latDir, lon, lonDir });
+                            
+                            const latitude = convertNMEAtoDecimal(lat, latDir);
+                            const longitude = convertNMEAtoDecimal(lon, lonDir);
+                            
+                            console.log('Konverterte koordinater:', { latitude, longitude });
+                            
+                            if (!isNaN(latitude) && !isNaN(longitude)) {
                                 points.push({
-                                    lat: lat,
-                                    lon: lon,
+                                    lat: latitude,
+                                    lon: longitude,
                                     time: new Date().toISOString(),
                                     altitude: parseFloat(parts[9])
                                 });
-                            }
-                        }
-                        // GNRMC format: $GNRMC,time,A,lat,N/S,lon,E/W,speed,course,date,...
-                        else if (line.startsWith('$GNRMC') && parts.length >= 10) {
-                            const lat = convertNMEAtoDecimal(parts[3], parts[4]);
-                            const lon = convertNMEAtoDecimal(parts[5], parts[6]);
-                            
-                            if (!isNaN(lat) && !isNaN(lon)) {
-                                points.push({
-                                    lat: lat,
-                                    lon: lon,
-                                    time: new Date().toISOString(),
-                                    speed: parseFloat(parts[7]) * 1.852 // Konverter knop til km/t
-                                });
+                                console.log('Punkt lagt til:', points[points.length - 1]);
+                            } else {
+                                console.log('Ugyldig konvertering');
                             }
                         }
                     }
                 } catch (e) {
-                    console.log('Kunne ikke parse linje:', line, e);
+                    console.log('Feil ved parsing av linje:', line);
+                    console.error(e);
                     continue;
                 }
             }
             
-            console.log('Ferdig med parsing. Fant punkter:', points.length);
+            console.log('Parsing fullført. Antall punkter funnet:', points.length);
+            if (points.length === 0) {
+                console.log('Ingen punkter funnet. Sjekk NMEA format.');
+            }
+            
             return points;
         }
 
