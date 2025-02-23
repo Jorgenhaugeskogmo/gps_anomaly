@@ -252,33 +252,45 @@
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
-        function parseNMEA(text) {
-            const lines = text.split('\n');
-            const points = [];
+        function convertNMEAtoDecimal(value, direction) {
+            if (!value) return NaN;
             
-            function convertNMEAtoDecimal(value, direction) {
-                if (!value) return NaN;
+            try {
+                // NMEA format: ddmm.mmmm (grader + minutter)
+                const degrees = parseFloat(value.slice(0, 2));
+                const minutes = parseFloat(value.slice(2)) / 60.0;
+                let decimal = degrees + minutes;
                 
-                // NMEA format er ddmm.mmmm eller dddmm.mmmm
-                const degree = parseFloat(value.slice(0, -7));
-                const minutes = parseFloat(value.slice(-7)) / 60;
-                let decimal = degree + minutes;
+                // For lengdegrad (longitude), formatet er dddmm.mmmm
+                if (direction === 'E' || direction === 'W') {
+                    decimal = parseFloat(value.slice(0, 3)) + parseFloat(value.slice(3)) / 60.0;
+                }
                 
                 // Juster for S/W retning
                 if (direction === 'S' || direction === 'W') {
                     decimal = -decimal;
                 }
                 
+                console.log(`Konverterer ${value} ${direction} til ${decimal}`);
                 return decimal;
+            } catch (e) {
+                console.log('Feil i konvertering:', value, direction, e);
+                return NaN;
             }
+        }
+
+        function parseNMEA(text) {
+            const lines = text.split('\n');
+            const points = [];
             
             for (const line of lines) {
                 try {
-                    if (line.startsWith('$GPGGA') || line.startsWith('$GPRMC')) {
+                    // Fokuser på GGA og RMC meldinger som inneholder posisjonsdata
+                    if (line.startsWith('$GNGGA') || line.startsWith('$GNRMC')) {
                         const parts = line.split(',');
                         
-                        // GPGGA format: $GPGGA,time,lat,N/S,lon,E/W,...
-                        if (line.startsWith('$GPGGA') && parts.length >= 6) {
+                        // GNGGA format: $GNGGA,time,lat,N/S,lon,E/W,fix,sats,hdop,alt,M,...
+                        if (line.startsWith('$GNGGA') && parts.length >= 10) {
                             const lat = convertNMEAtoDecimal(parts[2], parts[3]);
                             const lon = convertNMEAtoDecimal(parts[4], parts[5]);
                             
@@ -286,12 +298,13 @@
                                 points.push({
                                     lat: lat,
                                     lon: lon,
-                                    time: new Date().toISOString()
+                                    time: new Date().toISOString(),
+                                    altitude: parseFloat(parts[9])
                                 });
                             }
                         }
-                        // GPRMC format: $GPRMC,time,status,lat,N/S,lon,E/W,...
-                        else if (line.startsWith('$GPRMC') && parts.length >= 7) {
+                        // GNRMC format: $GNRMC,time,A,lat,N/S,lon,E/W,speed,course,date,...
+                        else if (line.startsWith('$GNRMC') && parts.length >= 10) {
                             const lat = convertNMEAtoDecimal(parts[3], parts[4]);
                             const lon = convertNMEAtoDecimal(parts[5], parts[6]);
                             
@@ -299,7 +312,8 @@
                                 points.push({
                                     lat: lat,
                                     lon: lon,
-                                    time: new Date().toISOString()
+                                    time: new Date().toISOString(),
+                                    speed: parseFloat(parts[7]) * 1.852 // Konverter knop til km/t
                                 });
                             }
                         }
@@ -309,6 +323,8 @@
                     continue;
                 }
             }
+            
+            console.log('Ferdig med parsing. Fant punkter:', points.length);
             return points;
         }
 
