@@ -390,16 +390,32 @@
                 try {
                     let points;
                     if (file.name.endsWith('.csv')) {
-                        // Parse CSV
+                        console.log('Parser CSV-fil');
                         const results = Papa.parse(e.target.result, {
-                            header: true,
+                            delimiter: ",",  // Spesifiser komma som skilletegn
                             skipEmptyLines: true
                         });
-                        points = results.data.map(row => ({
-                            lat: parseFloat(row.latitude || row.lat),
-                            lon: parseFloat(row.longitude || row.lon),
-                            time: row.timestamp || new Date().toISOString()
-                        }));
+                        console.log('CSV-data:', results.data);
+
+                        // Første rad er header
+                        const headers = results.data[0];
+                        console.log('CSV-headers:', headers);
+
+                        // Fjern header og parse data
+                        points = results.data.slice(1)
+                            .map(row => ({
+                                time: row[0],
+                                lat: parseFloat(row[1]),
+                                lon: parseFloat(row[2]),
+                                altitude: parseFloat(row[3])
+                            }))
+                            .filter(point => !isNaN(point.lat) && !isNaN(point.lon));
+
+                        console.log('Parsede punkter:', points);
+
+                        if (points.length === 0) {
+                            throw new Error('Ingen gyldige GPS-punkter funnet i CSV-filen');
+                        }
                     } else {
                         // Parse NMEA
                         points = parseNMEA(e.target.result);
@@ -548,8 +564,20 @@
         function updateMap(points) {
             clearMap();
             
-            const latlngs = points.map(point => [point.lat, point.lon]);
+            console.log('Oppdaterer kart med punkter:', points);
             
+            const latlngs = points.map(point => {
+                console.log('Punkt:', point);
+                return [point.lat, point.lon];
+            });
+            
+            console.log('LatLngs:', latlngs);
+            
+            if (latlngs.length === 0) {
+                console.error('Ingen gyldige koordinater å vise på kartet');
+                return;
+            }
+
             // Tegn linje mellom punktene
             const polyline = L.polyline(latlngs, {
                 color: 'blue',
@@ -578,13 +606,18 @@
                     Tid: ${point.time}<br>
                     Lat: ${point.lat.toFixed(6)}<br>
                     Lon: ${point.lon.toFixed(6)}
+                    ${point.altitude ? '<br>Høyde: ' + point.altitude.toFixed(1) + 'm' : ''}
                 `);
                 
                 markers.push(marker);
             });
             
-            // Zoom til alle punktene
-            map.fitBounds(latlngs);
+            try {
+                // Zoom til alle punktene
+                map.fitBounds(latlngs);
+            } catch (e) {
+                console.error('Feil ved zoom til punkter:', e);
+            }
         }
 
         function updateStats(points) {
