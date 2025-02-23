@@ -392,26 +392,29 @@
                     if (file.name.endsWith('.csv')) {
                         console.log('Parser CSV-fil');
                         const results = Papa.parse(e.target.result, {
-                            delimiter: ",",  // Spesifiser komma som skilletegn
-                            skipEmptyLines: true
+                            header: false,  // Ingen header i filen
+                            skipEmptyLines: true,
+                            delimiter: "," // Bruk komma som skilletegn
                         });
                         console.log('CSV-data:', results.data);
 
-                        // Første rad er header
-                        const headers = results.data[0];
-                        console.log('CSV-headers:', headers);
+                        // Parse data direkte (ingen header å fjerne)
+                        points = results.data
+                            .map(row => {
+                                // Fjern eventuelle tomme verdier
+                                const cleanRow = row.filter(val => val.trim() !== '');
+                                if (cleanRow.length < 4) return null;
 
-                        // Fjern header og parse data
-                        points = results.data.slice(1)
-                            .map(row => ({
-                                time: row[0],
-                                lat: parseFloat(row[1]),
-                                lon: parseFloat(row[2]),
-                                altitude: parseFloat(row[3])
-                            }))
-                            .filter(point => !isNaN(point.lat) && !isNaN(point.lon));
+                                return {
+                                    time: cleanRow[0],
+                                    lat: parseFloat(cleanRow[1].replace(',', '.')),
+                                    lon: parseFloat(cleanRow[2].replace(',', '.')),
+                                    altitude: parseFloat(cleanRow[3].replace(',', '.'))
+                                };
+                            })
+                            .filter(point => point && !isNaN(point.lat) && !isNaN(point.lon));
 
-                        console.log('Parsede punkter:', points);
+                        console.log('Parsede CSV-punkter:', points);
 
                         if (points.length === 0) {
                             throw new Error('Ingen gyldige GPS-punkter funnet i CSV-filen');
