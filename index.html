@@ -311,11 +311,13 @@
             if (!fileInput.files.length) {
                 message.textContent = 'Velg en fil først';
                 message.className = 'message error';
+                message.style.display = 'block';
                 return;
             }
 
             const file = fileInput.files[0];
             loading.style.display = 'block';
+            message.style.display = 'block';
             
             const reader = new FileReader();
             reader.onload = function(e) {
