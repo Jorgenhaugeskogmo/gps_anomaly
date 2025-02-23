@@ -1,114 +1,128 @@
+<!DOCTYPE html>
+<html lang="no">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        /* Kopier inn all CSS fra den forrige index.html her */
+    </style>
 </head>
-
-<script>
-    function parseNMEA(text) {
-        const lines = text.split('\n');
-        const points = [];
-        
-        for (const line of lines) {
-            if (line.startsWith('$GPGGA') || line.startsWith('$GPRMC')) {
-                const parts = line.split(',');
-                if (parts.length >= 6) {
-                    // Enkel NMEA parsing (kan utvides for mer nøyaktighet)
-                    const lat = parseFloat(parts[2]);
-                    const lon = parseFloat(parts[4]);
-                    if (!isNaN(lat) && !isNaN(lon)) {
-                        points.push({
-                            lat: lat,
-                            lon: lon,
-                            time: new Date().toISOString(),
-                        });
+<body>
+    <script>
+        function parseNMEA(text) {
+            const lines = text.split('\n');
+            const points = [];
+            
+            for (const line of lines) {
+                if (line.startsWith('$GPGGA') || line.startsWith('$GPRMC')) {
+                    const parts = line.split(',');
+                    if (parts.length >= 6) {
+                        // Enkel NMEA parsing (kan utvides for mer nøyaktighet)
+                        const lat = parseFloat(parts[2]);
+                        const lon = parseFloat(parts[4]);
+                        if (!isNaN(lat) && !isNaN(lon)) {
+                            points.push({
+                                lat: lat,
+                                lon: lon,
+                                time: new Date().toISOString(),
+                            });
+                        }
                     }
                 }
             }
-        }
-        return points;
-    }
-
-    function processData(points) {
-        // Beregn gjennomsnittlig posisjon
-        const avgLat = points.reduce((sum, p) => sum + p.lat, 0) / points.length;
-        const avgLon = points.reduce((sum, p) => sum + p.lon, 0) / points.length;
-        
-        // Beregn avvik og merk anomalier
-        const processed = points.map(point => {
-            const R = 6371000; // Jordens radius i meter
-            const dLat = (point.lat - avgLat) * Math.PI / 180;
-            const dLon = (point.lon - avgLon) * Math.PI / 180;
-            
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                     Math.cos(avgLat * Math.PI / 180) * Math.cos(point.lat * Math.PI / 180) *
-                     Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            const deviation = R * c;
-            
-            return {
-                ...point,
-                deviation,
-                is_anomaly: deviation > 100 // Merk som anomali hvis avvik > 100m
-            };
-        });
-        
-        return processed;
-    }
-
-    function uploadFile() {
-        const fileInput = document.getElementById('fileInput');
-        const message = document.getElementById('message');
-        const loading = document.getElementById('loading');
-
-        if (!fileInput.files.length) {
-            message.textContent = 'Velg en fil først';
-            message.className = 'message error';
-            return;
+            return points;
         }
 
-        const file = fileInput.files[0];
-        loading.style.display = 'block';
-        
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                let points;
-                if (file.name.endsWith('.csv')) {
-                    // Parse CSV
-                    const results = Papa.parse(e.target.result, {
-                        header: true,
-                        skipEmptyLines: true
-                    });
-                    points = results.data.map(row => ({
-                        lat: parseFloat(row.latitude || row.lat),
-                        lon: parseFloat(row.longitude || row.lon),
-                        time: row.timestamp || new Date().toISOString()
-                    }));
-                } else {
-                    // Parse NMEA
-                    points = parseNMEA(e.target.result);
-                }
-
-                if (points.length === 0) {
-                    throw new Error('Ingen gyldige GPS-punkter funnet');
-                }
-
-                const processed = processData(points);
+        function processData(points) {
+            // Beregn gjennomsnittlig posisjon
+            const avgLat = points.reduce((sum, p) => sum + p.lat, 0) / points.length;
+            const avgLon = points.reduce((sum, p) => sum + p.lon, 0) / points.length;
+            
+            // Beregn avvik og merk anomalier
+            const processed = points.map(point => {
+                const R = 6371000; // Jordens radius i meter
+                const dLat = (point.lat - avgLat) * Math.PI / 180;
+                const dLon = (point.lon - avgLon) * Math.PI / 180;
                 
-                // Oppdater UI
-                updateMap(processed);
-                createSpeedChart(processed);
-                updateStats(processed);
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                         Math.cos(avgLat * Math.PI / 180) * Math.cos(point.lat * Math.PI / 180) *
+                         Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                const deviation = R * c;
                 
-                message.textContent = `Fil prosessert. Fant ${points.length} GPS-punkter.`;
-                message.className = 'message success';
-            } catch (error) {
-                message.textContent = `Feil under prosessering: ${error.message}`;
+                return {
+                    ...point,
+                    deviation,
+                    is_anomaly: deviation > 100 // Merk som anomali hvis avvik > 100m
+                };
+            });
+            
+            return processed;
+        }
+
+        function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const message = document.getElementById('message');
+            const loading = document.getElementById('loading');
+
+            if (!fileInput.files.length) {
+                message.textContent = 'Velg en fil først';
                 message.className = 'message error';
-            } finally {
-                loading.style.display = 'none';
+                return;
             }
-        };
 
-        reader.readAsText(file);
-    }
-</script> 
+            const file = fileInput.files[0];
+            loading.style.display = 'block';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    let points;
+                    if (file.name.endsWith('.csv')) {
+                        // Parse CSV
+                        const results = Papa.parse(e.target.result, {
+                            header: true,
+                            skipEmptyLines: true
+                        });
+                        points = results.data.map(row => ({
+                            lat: parseFloat(row.latitude || row.lat),
+                            lon: parseFloat(row.longitude || row.lon),
+                            time: row.timestamp || new Date().toISOString()
+                        }));
+                    } else {
+                        // Parse NMEA
+                        points = parseNMEA(e.target.result);
+                    }
+
+                    if (points.length === 0) {
+                        throw new Error('Ingen gyldige GPS-punkter funnet');
+                    }
+
+                    const processed = processData(points);
+                    
+                    // Oppdater UI
+                    updateMap(processed);
+                    createSpeedChart(processed);
+                    updateStats(processed);
+                    
+                    message.textContent = `Fil prosessert. Fant ${points.length} GPS-punkter.`;
+                    message.className = 'message success';
+                } catch (error) {
+                    message.textContent = `Feil under prosessering: ${error.message}`;
+                    message.className = 'message error';
+                } finally {
+                    loading.style.display = 'none';
+                }
+            };
+
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html> 
