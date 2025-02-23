@@ -256,21 +256,57 @@
             const lines = text.split('\n');
             const points = [];
             
+            function convertNMEAtoDecimal(value, direction) {
+                if (!value) return NaN;
+                
+                // NMEA format er ddmm.mmmm eller dddmm.mmmm
+                const degree = parseFloat(value.slice(0, -7));
+                const minutes = parseFloat(value.slice(-7)) / 60;
+                let decimal = degree + minutes;
+                
+                // Juster for S/W retning
+                if (direction === 'S' || direction === 'W') {
+                    decimal = -decimal;
+                }
+                
+                return decimal;
+            }
+            
             for (const line of lines) {
-                if (line.startsWith('$GPGGA') || line.startsWith('$GPRMC')) {
-                    const parts = line.split(',');
-                    if (parts.length >= 6) {
-                        // Enkel NMEA parsing (kan utvides for mer nøyaktighet)
-                        const lat = parseFloat(parts[2]);
-                        const lon = parseFloat(parts[4]);
-                        if (!isNaN(lat) && !isNaN(lon)) {
-                            points.push({
-                                lat: lat,
-                                lon: lon,
-                                time: new Date().toISOString(),
-                            });
+                try {
+                    if (line.startsWith('$GPGGA') || line.startsWith('$GPRMC')) {
+                        const parts = line.split(',');
+                        
+                        // GPGGA format: $GPGGA,time,lat,N/S,lon,E/W,...
+                        if (line.startsWith('$GPGGA') && parts.length >= 6) {
+                            const lat = convertNMEAtoDecimal(parts[2], parts[3]);
+                            const lon = convertNMEAtoDecimal(parts[4], parts[5]);
+                            
+                            if (!isNaN(lat) && !isNaN(lon)) {
+                                points.push({
+                                    lat: lat,
+                                    lon: lon,
+                                    time: new Date().toISOString()
+                                });
+                            }
+                        }
+                        // GPRMC format: $GPRMC,time,status,lat,N/S,lon,E/W,...
+                        else if (line.startsWith('$GPRMC') && parts.length >= 7) {
+                            const lat = convertNMEAtoDecimal(parts[3], parts[4]);
+                            const lon = convertNMEAtoDecimal(parts[5], parts[6]);
+                            
+                            if (!isNaN(lat) && !isNaN(lon)) {
+                                points.push({
+                                    lat: lat,
+                                    lon: lon,
+                                    time: new Date().toISOString()
+                                });
+                            }
                         }
                     }
+                } catch (e) {
+                    console.log('Kunne ikke parse linje:', line, e);
+                    continue;
                 }
             }
             return points;
