@@ -480,23 +480,26 @@
             // Definer varslingsgrenser
             const thresholds = {
                 red: 100,    // 100m+ avvik
-                orange: 15,  // 10-15m avvik
-                yellow: 50   // opp til 50m avvik
+                yellow: 50,  // opp til 50m avvik
+                orange: 15   // 10-15m avvik
             };
+
+            // Registrer plugin for annotations
+            Chart.register(ChartAnnotation);
 
             speedChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: points.map((_, i) => i + 1),
                     datasets: [{
-                        label: 'Avvik fra gjennomsnitt (meter)',
+                        label: 'Posisjonsavvik',
                         data: deviations,
                         borderColor: 'rgb(33, 150, 243)',
-                        backgroundColor: points.map(p => {
-                            if (p.deviation > thresholds.red) return 'rgba(244, 67, 54, 0.5)';  // Rød
-                            if (p.deviation > thresholds.yellow) return 'rgba(255, 193, 7, 0.5)';  // Gul
-                            if (p.deviation > thresholds.orange) return 'rgba(255, 152, 0, 0.5)';  // Oransje
-                            return 'rgba(33, 150, 243, 0.1)';  // Normal (blå)
+                        backgroundColor: deviations.map(d => {
+                            if (d > thresholds.red) return 'rgba(244, 67, 54, 0.3)';      // Rød
+                            if (d > thresholds.yellow) return 'rgba(255, 193, 7, 0.3)';   // Gul
+                            if (d > thresholds.orange) return 'rgba(255, 152, 0, 0.3)';   // Oransje
+                            return 'rgba(33, 150, 243, 0.1)';                             // Blå (normal)
                         }),
                         fill: true,
                         tension: 0.1
@@ -514,10 +517,12 @@
                                     yMax: thresholds.red,
                                     borderColor: 'rgb(244, 67, 54)',
                                     borderWidth: 2,
+                                    borderDash: [5, 5],
                                     label: {
                                         content: '🔴 Rød varsling (100m+)',
                                         enabled: true,
-                                        position: 'right'
+                                        position: 'end',
+                                        backgroundColor: 'rgb(244, 67, 54)'
                                     }
                                 },
                                 yellowLine: {
@@ -526,10 +531,12 @@
                                     yMax: thresholds.yellow,
                                     borderColor: 'rgb(255, 193, 7)',
                                     borderWidth: 2,
+                                    borderDash: [5, 5],
                                     label: {
                                         content: '🟡 Gul varsling (50m)',
                                         enabled: true,
-                                        position: 'right'
+                                        position: 'end',
+                                        backgroundColor: 'rgb(255, 193, 7)'
                                     }
                                 },
                                 orangeLine: {
@@ -538,10 +545,12 @@
                                     yMax: thresholds.orange,
                                     borderColor: 'rgb(255, 152, 0)',
                                     borderWidth: 2,
+                                    borderDash: [5, 5],
                                     label: {
                                         content: '🟠 Oransje varsling (15m)',
                                         enabled: true,
-                                        position: 'right'
+                                        position: 'end',
+                                        backgroundColor: 'rgb(255, 152, 0)'
                                     }
                                 }
                             }
@@ -549,8 +558,7 @@
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    const point = points[context.dataIndex];
-                                    const deviation = deviations[context.dataIndex];
+                                    const deviation = context.raw;
                                     let status = 'Normal';
                                     let warningText = '';
 
@@ -568,8 +576,7 @@
                                     return [
                                         `Avvik: ${deviation.toFixed(1)} meter`,
                                         `Status: ${status}`,
-                                        `Tid: ${point.time}`,
-                                        warningText ? `Varsling: ${warningText}` : null
+                                        warningText ? `⚠️ ${warningText}` : null
                                     ].filter(Boolean);
                                 }
                             }
