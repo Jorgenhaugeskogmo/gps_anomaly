@@ -360,42 +360,56 @@
         function parseNMEA(text) {
             const lines = text.split('\n');
             const points = [];
+            let currentDate = new Date(); // Standard dato hvis vi ikke finner GNZDA
             
-            console.log('Starter NMEA parsing...');
-            console.log('Antall linjer:', lines.length);
+            // Først finn datoen fra GNZDA
+            for (const line of lines) {
+                if (line.startsWith('$GNZDA')) {
+                    // $GNZDA,202423.000,10,02,2025,,*4B
+                    // Format: $GNZDA,hhmmss.sss,dd,mm,yyyy,xx,yy
+                    const parts = line.split(',');
+                    if (parts.length >= 5) {
+                        const day = parseInt(parts[2]);
+                        const month = parseInt(parts[3]) - 1; // JavaScript måneder er 0-basert
+                        const year = parseInt(parts[4]);
+                        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                            currentDate = new Date(year, month, day);
+                            console.log('Fant dato:', currentDate);
+                            break;
+                        }
+                    }
+                }
+            }
             
+            // Så parse GGA-dataene med korrekt dato
             for (const line of lines) {
                 try {
                     if (line.startsWith('$GNGGA')) {
-                        console.log('GNGGA linje funnet:', line);
                         const parts = line.split(',');
-                        console.log('Deler:', parts);
                         
-                        // GNGGA format: $GNGGA,202423.000,5947.6712,N,01025.2748,E,2,13,0.75,181.8,M,40.9,M,,*7B
                         if (parts.length >= 10) {
                             const lat = parts[2];
                             const latDir = parts[3];
                             const lon = parts[4];
                             const lonDir = parts[5];
                             
-                            console.log('Rådata:', { lat, latDir, lon, lonDir });
-                            
                             // Parse tidsstempel fra NMEA (HHMMSS.sss format)
                             const timeStr = parts[1];
-                            let timestamp = new Date();
+                            let timestamp = new Date(currentDate); // Bruk datoen vi fant
+                            
                             if (timeStr && timeStr.length >= 6) {
                                 const hours = parseInt(timeStr.substring(0, 2));
                                 const minutes = parseInt(timeStr.substring(2, 4));
                                 const seconds = parseInt(timeStr.substring(4, 6));
-                                const milliseconds = timeStr.includes('.') ? parseInt(timeStr.split('.')[1]) : 0;
+                                const milliseconds = timeStr.includes('.') ? 
+                                    parseInt(timeStr.split('.')[1]) : 0;
                                 
                                 timestamp.setHours(hours, minutes, seconds, milliseconds);
+                                console.log('Satt tidspunkt:', timestamp);
                             }
                             
                             const latitude = convertNMEAtoDecimal(lat, latDir);
                             const longitude = convertNMEAtoDecimal(lon, lonDir);
-                            
-                            console.log('Konverterte koordinater:', { latitude, longitude });
                             
                             if (!isNaN(latitude) && !isNaN(longitude)) {
                                 points.push({
@@ -404,9 +418,6 @@
                                     time: timestamp.toISOString(),
                                     altitude: parseFloat(parts[9])
                                 });
-                                console.log('Punkt lagt til:', points[points.length - 1]);
-                            } else {
-                                console.log('Ugyldig konvertering');
                             }
                         }
                     }
@@ -415,11 +426,6 @@
                     console.error(e);
                     continue;
                 }
-            }
-            
-            console.log('Parsing fullført. Antall punkter funnet:', points.length);
-            if (points.length === 0) {
-                console.log('Ingen punkter funnet. Sjekk NMEA format.');
             }
             
             return points;
