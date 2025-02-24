@@ -279,6 +279,36 @@
             opacity: 0.7;
             line-height: 1.4;
         }
+
+        .zoom-controls {
+            position: absolute;
+            pointer-events: none;
+        }
+        .zoom-controls.vertical {
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 200px;
+            margin-left: 10px;
+        }
+        .zoom-controls.horizontal {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+        }
+        .zoom-slider {
+            pointer-events: auto;
+        }
+        .vertical .zoom-slider {
+            writing-mode: bt-lr;
+            -webkit-appearance: slider-vertical;
+            width: 20px;
+            height: 100%;
+        }
+        .horizontal .zoom-slider {
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -797,6 +827,110 @@
                         intersect: false
                     }
                 }
+            });
+
+            // Opprett zoom-kontroller container
+            const chartContainer = document.querySelector('.chart-container');
+            chartContainer.style.position = 'relative';
+
+            // Legg til CSS for zoom-kontroller
+            const style = document.createElement('style');
+            style.textContent = `
+                .zoom-controls {
+                    position: absolute;
+                    pointer-events: none;
+                }
+                .zoom-controls.vertical {
+                    left: 0;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    height: 200px;
+                    margin-left: 10px;
+                }
+                .zoom-controls.horizontal {
+                    bottom: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    width: 200px;
+                }
+                .zoom-slider {
+                    pointer-events: auto;
+                }
+                .vertical .zoom-slider {
+                    writing-mode: bt-lr;
+                    -webkit-appearance: slider-vertical;
+                    width: 20px;
+                    height: 100%;
+                }
+                .horizontal .zoom-slider {
+                    width: 100%;
+                }
+            `;
+            document.head.appendChild(style);
+
+            // Opprett Y-akse zoom kontroll
+            const verticalZoomControls = document.createElement('div');
+            verticalZoomControls.className = 'zoom-controls vertical';
+            verticalZoomControls.innerHTML = `
+                <input type="range" class="zoom-slider" min="0" max="100" value="0" 
+                       title="Zoom Y-akse">
+            `;
+
+            // Opprett X-akse zoom kontroll
+            const horizontalZoomControls = document.createElement('div');
+            horizontalZoomControls.className = 'zoom-controls horizontal';
+            horizontalZoomControls.innerHTML = `
+                <input type="range" class="zoom-slider" min="0" max="100" value="0" 
+                       title="Zoom X-akse">
+            `;
+
+            chartContainer.appendChild(verticalZoomControls);
+            chartContainer.appendChild(horizontalZoomControls);
+
+            // Håndter vertikalt zoom
+            verticalZoomControls.querySelector('input').addEventListener('input', (e) => {
+                const zoomLevel = e.target.value / 100;
+                const maxDeviation = Math.max(...deviations);
+                
+                // Start med maksimum 100m eller høyeste avvik
+                const startMax = Math.max(100, maxDeviation);
+                
+                // Zoom inn ved å redusere maksimumsverdien
+                const newMax = startMax * (1 - zoomLevel * 0.9);
+                
+                speedChart.options.scales.y = {
+                    beginAtZero: true,
+                    max: newMax,
+                    title: {
+                        display: true,
+                        text: 'Avvik (meter)'
+                    },
+                    ticks: {
+                        stepSize: newMax > 50 ? 10 : newMax > 20 ? 5 : 1
+                    }
+                };
+                
+                speedChart.update('none');
+            });
+
+            // Håndter horisontalt zoom
+            horizontalZoomControls.querySelector('input').addEventListener('input', (e) => {
+                const zoomLevel = e.target.value / 100;
+                const totalPoints = points.length;
+                const visiblePoints = Math.max(10, Math.floor(totalPoints * (1 - zoomLevel * 0.9)));
+                
+                // Behold nåværende midtpunkt hvis det finnes
+                const currentMin = speedChart.scales.x.min || 0;
+                const currentMax = speedChart.scales.x.max || totalPoints;
+                const currentCenter = Math.floor((currentMin + currentMax) / 2);
+                
+                const halfWindow = Math.floor(visiblePoints / 2);
+                const start = Math.max(0, currentCenter - halfWindow);
+                const end = Math.min(totalPoints, currentCenter + halfWindow);
+                
+                speedChart.options.scales.x.min = start;
+                speedChart.options.scales.x.max = end;
+                speedChart.update('none');
             });
         }
 
