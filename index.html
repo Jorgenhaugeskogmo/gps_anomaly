@@ -664,54 +664,23 @@
             });
 
             horizontalZoomControls.querySelector('input').addEventListener('input', (e) => {
-                const zoomLevel = e.target.value / 100; // 0 til 1
+                const zoomLevel = e.target.value / 100;
                 const totalPoints = points.length;
-                
-                // Start med alle punkter synlige
                 const startWindow = totalPoints;
-                
-                // Zoom inn ved å redusere vindusstørrelsen
-                // Jo høyere zoomLevel, jo færre punkter vises
                 const visiblePoints = Math.max(10, Math.floor(startWindow * (1 - zoomLevel * 0.9)));
                 
-                // Finn interessante områder (f.eks. der det er anomalier)
-                const anomalyIndices = points
-                    .map((p, i) => p.is_anomaly ? i : null)
-                    .filter(i => i !== null);
+                // Behold nåværende midtpunkt ved zoom
+                const currentMin = speedChart.scales.x.min || 0;
+                const currentMax = speedChart.scales.x.max || totalPoints;
+                const currentCenter = (currentMin + currentMax) / 2;
                 
-                let center;
-                if (anomalyIndices.length > 0) {
-                    // Zoom mot nærmeste anomali
-                    const middleIndex = Math.floor(totalPoints / 2);
-                    center = anomalyIndices.reduce((closest, current) => 
-                        Math.abs(current - middleIndex) < Math.abs(closest - middleIndex) 
-                            ? current 
-                            : closest
-                    );
-                } else {
-                    // Hvis ingen anomalier, zoom mot midten
-                    center = Math.floor(totalPoints / 2);
-                }
-                
-                // Beregn start og slutt basert på zoom-nivå
+                // Beregn nye grenser rundt nåværende midtpunkt
                 const halfWindow = Math.floor(visiblePoints / 2);
-                const start = Math.max(0, center - halfWindow);
-                const end = Math.min(totalPoints, center + halfWindow);
+                const start = Math.max(0, currentCenter - halfWindow);
+                const end = Math.min(totalPoints, currentCenter + halfWindow);
                 
-                // Oppdater chart
-                speedChart.options.scales.x = {
-                    min: start,
-                    max: end,
-                    title: {
-                        display: true,
-                        text: 'Punktnummer'
-                    },
-                    ticks: {
-                        // Juster antall tick marks basert på zoom-nivå
-                        stepSize: visiblePoints > 100 ? 10 : visiblePoints > 50 ? 5 : 1
-                    }
-                };
-                
+                speedChart.options.scales.x.min = start;
+                speedChart.options.scales.x.max = end;
                 speedChart.update();
             });
 
@@ -837,6 +806,29 @@
                             },
                             min: 0,
                             max: points.length
+                        }
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x',  // Bare tillat panning horisontalt
+                        modifierKey: null, // Ingen modifier key nødvendig
+                        speed: 10,
+                        threshold: 10
+                    },
+                    zoom: {
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                            modifierKey: null
+                        },
+                        drag: {
+                            enabled: false // Deaktiver drag-to-zoom siden vi bruker sliders
+                        },
+                        pinch: {
+                            enabled: false // Deaktiver pinch-to-zoom
+                        },
+                        wheel: {
+                            enabled: false // Deaktiver wheel-to-zoom
                         }
                     }
                 }
