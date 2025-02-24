@@ -612,19 +612,51 @@
 
             // Håndter zoom events
             verticalZoomControls.querySelector('input').addEventListener('input', (e) => {
-                const scale = 1 + (e.target.value / 100);
-                speedChart.options.scales.y.min = -Math.max(...deviations) * (scale - 1);
-                speedChart.options.scales.y.max = Math.max(...deviations) * scale;
+                const zoomLevel = e.target.value / 100; // 0 til 1
+                const maxDeviation = Math.max(...deviations);
+                const minDeviation = Math.min(...deviations);
+                
+                // Start med maksimum 100m eller høyeste avvik
+                const startMax = Math.max(100, maxDeviation);
+                
+                // Zoom inn ved å redusere maksimumsverdien
+                // Jo høyere zoomLevel, jo lavere maksverdi (mer zoom)
+                const newMax = startMax * (1 - zoomLevel * 0.9); // Behold 10% av original skala ved maks zoom
+                
+                speedChart.options.scales.y = {
+                    beginAtZero: true,
+                    max: newMax,
+                    title: {
+                        display: true,
+                        text: 'Avvik (meter)'
+                    },
+                    ticks: {
+                        // Juster antall tick marks basert på zoom-nivå
+                        stepSize: newMax > 50 ? 10 : newMax > 20 ? 5 : 1
+                    }
+                };
+                
                 speedChart.update();
             });
 
             horizontalZoomControls.querySelector('input').addEventListener('input', (e) => {
-                const scale = 1 - (e.target.value / 100);
+                const zoomLevel = e.target.value / 100; // 0 til 1
                 const totalPoints = points.length;
-                const visiblePoints = Math.max(10, Math.floor(totalPoints * scale));
-                const start = Math.floor((totalPoints - visiblePoints) / 2);
+                
+                // Minimum 10 punkter synlig, maksimum alle punkter
+                const visiblePoints = Math.max(10, Math.floor(totalPoints * (1 - zoomLevel)));
+                
+                // Beregn midtpunkt for zoom
+                const center = Math.floor(totalPoints / 2);
+                const halfWindow = Math.floor(visiblePoints / 2);
+                
+                // Sett vindusgrenser
+                const start = Math.max(0, center - halfWindow);
+                const end = Math.min(totalPoints, center + halfWindow);
+                
                 speedChart.options.scales.x.min = start;
-                speedChart.options.scales.x.max = start + visiblePoints;
+                speedChart.options.scales.x.max = end;
+                
                 speedChart.update();
             });
 
