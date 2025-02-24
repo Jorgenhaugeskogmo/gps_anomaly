@@ -643,19 +643,50 @@
                 const zoomLevel = e.target.value / 100; // 0 til 1
                 const totalPoints = points.length;
                 
-                // Minimum 10 punkter synlig, maksimum alle punkter
-                const visiblePoints = Math.max(10, Math.floor(totalPoints * (1 - zoomLevel)));
+                // Start med alle punkter synlige
+                const startWindow = totalPoints;
                 
-                // Beregn midtpunkt for zoom
-                const center = Math.floor(totalPoints / 2);
+                // Zoom inn ved å redusere vindusstørrelsen
+                // Jo høyere zoomLevel, jo færre punkter vises
+                const visiblePoints = Math.max(10, Math.floor(startWindow * (1 - zoomLevel * 0.9)));
+                
+                // Finn interessante områder (f.eks. der det er anomalier)
+                const anomalyIndices = points
+                    .map((p, i) => p.is_anomaly ? i : null)
+                    .filter(i => i !== null);
+                
+                let center;
+                if (anomalyIndices.length > 0) {
+                    // Zoom mot nærmeste anomali
+                    const middleIndex = Math.floor(totalPoints / 2);
+                    center = anomalyIndices.reduce((closest, current) => 
+                        Math.abs(current - middleIndex) < Math.abs(closest - middleIndex) 
+                            ? current 
+                            : closest
+                    );
+                } else {
+                    // Hvis ingen anomalier, zoom mot midten
+                    center = Math.floor(totalPoints / 2);
+                }
+                
+                // Beregn start og slutt basert på zoom-nivå
                 const halfWindow = Math.floor(visiblePoints / 2);
-                
-                // Sett vindusgrenser
                 const start = Math.max(0, center - halfWindow);
                 const end = Math.min(totalPoints, center + halfWindow);
                 
-                speedChart.options.scales.x.min = start;
-                speedChart.options.scales.x.max = end;
+                // Oppdater chart
+                speedChart.options.scales.x = {
+                    min: start,
+                    max: end,
+                    title: {
+                        display: true,
+                        text: 'Punktnummer'
+                    },
+                    ticks: {
+                        // Juster antall tick marks basert på zoom-nivå
+                        stepSize: visiblePoints > 100 ? 10 : visiblePoints > 50 ? 5 : 1
+                    }
+                };
                 
                 speedChart.update();
             });
