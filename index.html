@@ -270,6 +270,15 @@
             color: var(--text);
             opacity: 0.8;
         }
+
+        .stat-box small {
+            display: block;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text);
+            opacity: 0.7;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
@@ -973,26 +982,37 @@
                 <div class="stat-box">
                     <h3>Totalt antall punkter</h3>
                     <p>${points.length}</p>
+                    <small>Totalt antall GPS-målinger i datasettet</small>
                 </div>
                 <div class="stat-box">
                     <h3>Antall satellitter</h3>
                     <p>${lastPoint.satelliteCount || 'N/A'}</p>
+                    <small>Minimum 4 satellitter kreves for posisjon. 6+ gir god nøyaktighet. 
+                    10+ gir optimal nøyaktighet. Under 6 kan indikere jamming.</small>
                 </div>
                 <div class="stat-box">
-                    <h3>Signalkvalitet</h3>
+                    <h3>Signalkvalitet (SNR)</h3>
                     <p>${lastPoint.signalQuality?.toFixed(1) || 'N/A'}</p>
+                    <small>Signal-to-Noise Ratio. Over 40 er utmerket, 30-40 er god, 
+                    20-30 er moderat, under 20 er dårlig og kan indikere jamming.</small>
                 </div>
                 <div class="stat-box">
                     <h3>HDOP</h3>
                     <p>${lastPoint.hdop?.toFixed(2) || 'N/A'}</p>
+                    <small>Horizontal Dilution of Precision. Under 1 er ideelt, 1-2 er utmerket, 
+                    2-5 er god, 5-10 er moderat, over 10 er dårlig. Høy HDOP kan indikere jamming.</small>
                 </div>
                 <div class="stat-box ${jammingStatus.isJammed ? 'warning' : ''}">
                     <h3>Jamming-status</h3>
                     <p>${jammingStatus.isJammed ? '🚨 Detektert' : '✅ Normal'}</p>
+                    <small>Indikerer om GPS-signalet blir aktivt forstyrret. Basert på kombinasjon av 
+                    lav signalstyrke, høy HDOP og plutselig tap av satellitter.</small>
                 </div>
                 <div class="stat-box ${spoofingStatus.isSpoofed ? 'warning' : ''}">
                     <h3>Spoofing-status</h3>
                     <p>${spoofingStatus.isSpoofed ? '⚠️ Mistenkt' : '✅ Normal'}</p>
+                    <small>Indikerer om GPS-signalet kan være forfalsket. Oppdages ved unormalt 
+                    store posisjonshopp, urealistisk hastighet eller tidsfeil.</small>
                 </div>
             `;
         }
