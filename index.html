@@ -382,6 +382,10 @@
                 }
             }
             
+            let currentGSA = null;
+            let currentRMC = null;
+            let currentGSV = null;
+
             // Så parse GGA-dataene med korrekt dato
             for (const line of lines) {
                 try {
@@ -417,10 +421,24 @@
                                     lat: latitude,
                                     lon: longitude,
                                     time: timestamp.toISOString(),
-                                    altitude: parseFloat(parts[9])
+                                    altitude: parseFloat(parts[9]),
+                                    hdop: currentGSA?.hdop,
+                                    pdop: currentGSA?.pdop,
+                                    vdop: currentGSA?.vdop,
+                                    speed: currentRMC?.speed,
+                                    course: currentRMC?.course,
+                                    satelliteCount: currentGSV?.totalSatellites,
+                                    signalQuality: currentGSV?.satellites.reduce((acc, sat) => 
+                                        acc + (parseFloat(sat.snr) || 0), 0) / currentGSV?.satellites.length
                                 });
                             }
                         }
+                    } else if (line.startsWith('$GNGSA') || line.startsWith('$GPGSA')) {
+                        currentGSA = parseGSA(line);
+                    } else if (line.startsWith('$GNRMC')) {
+                        currentRMC = parseRMC(line);
+                    } else if (line.startsWith('$GPGSV')) {
+                        currentGSV = parseGSV(line);
                     }
                 } catch (e) {
                     console.log('Feil ved parsing av linje:', line);
@@ -460,23 +478,49 @@
         }
 
         function detectJamming(points) {
-            // Legg til i processData():
-            return {
-                lowSignalStrength: cno < 30,
-                suddenSatelliteLoss: satCount < previousSatCount - 5,
-                highDOP: hdop > 5 || pdop > 8,
-                isJammed: /* kombiner indikatorer */
+            if (!points || points.length === 0) return { isJammed: false };
+            
+            const currentPoint = points[points.length - 1];
+            const previousPoint = points.length > 1 ? points[points.length - 2] : null;
+            
+            const indicators = {
+                lowSignalStrength: currentPoint.signalQuality < 30,
+                suddenSatelliteLoss: previousPoint && 
+                    (currentPoint.satelliteCount < previousPoint.satelliteCount - 5),
+                highDOP: currentPoint.hdop > 5 || currentPoint.pdop > 8,
+                poorFixType: currentPoint.fixType === 1 || !currentPoint.fixType
             };
+            
+            // En kombinasjon av indikatorer indikerer jamming
+            indicators.isJammed = (indicators.lowSignalStrength && indicators.highDOP) ||
+                                 (indicators.suddenSatelliteLoss && indicators.poorFixType);
+            
+            return indicators;
         }
 
         function detectSpoofing(points) {
-            // Legg til i processData():
-            return {
-                unrealisticMovement: speed > 500, // km/t
-                suddenPositionJump: deviation > 1000, // meter
-                timeInconsistency: timeDiff > 2, // sekunder
-                isSpoofed: /* kombiner indikatorer */
+            if (!points || points.length < 2) return { isSpoofed: false };
+            
+            const currentPoint = points[points.length - 1];
+            const previousPoint = points[points.length - 2];
+            
+            // Beregn tidsdifferanse i sekunder
+            const timeDiff = (new Date(currentPoint.time) - new Date(previousPoint.time)) / 1000;
+            
+            const indicators = {
+                unrealisticMovement: currentPoint.speed > 500, // km/t
+                suddenPositionJump: currentPoint.deviation > 1000, // meter
+                timeInconsistency: Math.abs(timeDiff) > 2, // sekunder
+                invalidFix: !currentPoint.isValid
             };
+            
+            // Kombinasjon av indikatorer for spoofing
+            indicators.isSpoofed = (indicators.unrealisticMovement || 
+                                   indicators.suddenPositionJump) &&
+                                  (indicators.timeInconsistency || 
+                                   indicators.invalidFix);
+            
+            return indicators;
         }
 
         function uploadFile() {
@@ -921,15 +965,9 @@
 
         function updateStats(points) {
             const anomalies = points.filter(p => p.is_anomaly).length;
-            
-            const stats = {
-                satelliteCount: points[points.length-1].satCount,
-                signalStrength: points[points.length-1].cno,
-                hdop: points[points.length-1].hdop,
-                speed: points[points.length-1].speed,
-                jammingStatus: detectJamming(points).isJammed,
-                spoofingStatus: detectSpoofing(points).isSpoofed
-            };
+            const lastPoint = points[points.length-1];
+            const jammingStatus = detectJamming(points);
+            const spoofingStatus = detectSpoofing(points);
             
             document.getElementById('stats').innerHTML = `
                 <div class="stat-box">
@@ -937,12 +975,24 @@
                     <p>${points.length}</p>
                 </div>
                 <div class="stat-box">
-                    <h3>Antall anomalier</h3>
-                    <p>${anomalies}</p>
+                    <h3>Antall satellitter</h3>
+                    <p>${lastPoint.satelliteCount || 'N/A'}</p>
                 </div>
                 <div class="stat-box">
-                    <h3>Maksimalt avvik</h3>
-                    <p>${Math.max(...points.map(p => p.deviation)).toFixed(1)}m</p>
+                    <h3>Signalkvalitet</h3>
+                    <p>${lastPoint.signalQuality?.toFixed(1) || 'N/A'}</p>
+                </div>
+                <div class="stat-box">
+                    <h3>HDOP</h3>
+                    <p>${lastPoint.hdop?.toFixed(2) || 'N/A'}</p>
+                </div>
+                <div class="stat-box ${jammingStatus.isJammed ? 'warning' : ''}">
+                    <h3>Jamming-status</h3>
+                    <p>${jammingStatus.isJammed ? '🚨 Detektert' : '✅ Normal'}</p>
+                </div>
+                <div class="stat-box ${spoofingStatus.isSpoofed ? 'warning' : ''}">
+                    <h3>Spoofing-status</h3>
+                    <p>${spoofingStatus.isSpoofed ? '⚠️ Mistenkt' : '✅ Normal'}</p>
                 </div>
             `;
         }
@@ -954,18 +1004,75 @@
         });
 
         function parseGSV(line) {
-            // Parse $GPGSV, $GLGSV, $BDGSV for satellittsignalstyrke
-            // Returner: antall satellitter og C/No-verdier
+            // $GPGSV,3,1,11,03,03,111,00,04,15,270,00,06,01,010,00,13,06,292,00*74
+            // Format: $GPGSV,antall_meldinger,melding_nr,antall_satellitter,...
+            try {
+                const parts = line.split(',');
+                if (parts.length < 4) return null;
+                
+                return {
+                    totalSatellites: parseInt(parts[3]),
+                    satellites: parts.slice(4).reduce((acc, val, idx) => {
+                        if (idx % 4 === 0) {
+                            acc.push({
+                                id: val,
+                                elevation: parts[idx + 1],
+                                azimuth: parts[idx + 2],
+                                snr: parts[idx + 3]?.split('*')[0] // Signal-to-Noise Ratio
+                            });
+                        }
+                        return acc;
+                    }, [])
+                };
+            } catch (e) {
+                console.error('Feil ved parsing av GSV:', e);
+                return null;
+            }
         }
 
         function parseGSA(line) {
-            // Parse $GNGSA, $GPGSA for DOP-verdier
-            // Returner: HDOP, PDOP, VDOP og fikseringsstatus
+            // $GNGSA,A,3,01,02,03,04,05,06,07,08,09,10,11,12,1.0,0.5,0.8*3A
+            // Format: $GNGSA,Auto/Manual,Fix Type,SV used,... PDOP,HDOP,VDOP*checksum
+            try {
+                const parts = line.split(',');
+                if (parts.length < 17) return null;
+
+                return {
+                    fixType: parseInt(parts[2]), // 1=no fix, 2=2D, 3=3D
+                    satellitesUsed: parts.slice(3, 15).filter(id => id !== ''),
+                    pdop: parseFloat(parts[15]),
+                    hdop: parseFloat(parts[16]),
+                    vdop: parseFloat(parts[17].split('*')[0]),
+                    isValid: parseInt(parts[2]) === 3 // True hvis 3D fix
+                };
+            } catch (e) {
+                console.error('Feil ved parsing av GSA:', e);
+                return null;
+            }
         }
 
         function parseRMC(line) {
-            // Parse $GNRMC for hastighet og kurs
-            // Returner: SOG, COG og tidsstempel
+            // $GNRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A
+            // Format: $GNRMC,time,status,lat,N/S,lon,E/W,speed,angle,date,mag var,E/W*checksum
+            try {
+                const parts = line.split(',');
+                if (parts.length < 12) return null;
+
+                const status = parts[2] === 'A'; // A=active/valid, V=void/invalid
+                const speed = parseFloat(parts[7]) * 1.852; // Konverter knop til km/t
+                const course = parseFloat(parts[8]);
+
+                return {
+                    isValid: status,
+                    speed: speed,         // Hastighet i km/t
+                    course: course,       // Kurs i grader
+                    timeUTC: parts[1],    // HHMMSS.sss
+                    date: parts[9]        // DDMMYY
+                };
+            } catch (e) {
+                console.error('Feil ved parsing av RMC:', e);
+                return null;
+            }
         }
 
         const warningLevels = {
@@ -983,11 +1090,90 @@
         };
 
         function createSignalChart(points) {
-            // Ny graf for satellittsignalstyrke
+            const ctx = document.createElement('canvas').getContext('2d');
+            document.querySelector('.chart-container').appendChild(ctx.canvas);
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: points.map((_, i) => i + 1),
+                    datasets: [{
+                        label: 'Signalstyrke (SNR)',
+                        data: points.map(p => p.signalQuality),
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }, {
+                        label: 'Antall satellitter',
+                        data: points.map(p => p.satelliteCount),
+                        borderColor: 'rgb(153, 102, 255)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'GPS Signalkvalitet'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Verdi'
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         function createDOPChart(points) {
-            // Ny graf for DOP-verdier
+            const ctx = document.createElement('canvas').getContext('2d');
+            document.querySelector('.chart-container').appendChild(ctx.canvas);
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: points.map((_, i) => i + 1),
+                    datasets: [{
+                        label: 'HDOP',
+                        data: points.map(p => p.hdop),
+                        borderColor: 'rgb(255, 99, 132)',
+                        tension: 0.1
+                    }, {
+                        label: 'PDOP',
+                        data: points.map(p => p.pdop),
+                        borderColor: 'rgb(54, 162, 235)',
+                        tension: 0.1
+                    }, {
+                        label: 'VDOP',
+                        data: points.map(p => p.vdop),
+                        borderColor: 'rgb(255, 206, 86)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'GPS Presisjon (DOP-verdier)'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'DOP'
+                            }
+                        }
+                    }
+                }
+            });
         }
     </script>
 </body>
