@@ -459,6 +459,26 @@
             return processed;
         }
 
+        function detectJamming(points) {
+            // Legg til i processData():
+            return {
+                lowSignalStrength: cno < 30,
+                suddenSatelliteLoss: satCount < previousSatCount - 5,
+                highDOP: hdop > 5 || pdop > 8,
+                isJammed: /* kombiner indikatorer */
+            };
+        }
+
+        function detectSpoofing(points) {
+            // Legg til i processData():
+            return {
+                unrealisticMovement: speed > 500, // km/t
+                suddenPositionJump: deviation > 1000, // meter
+                timeInconsistency: timeDiff > 2, // sekunder
+                isSpoofed: /* kombiner indikatorer */
+            };
+        }
+
         function uploadFile() {
             const fileInput = document.getElementById('fileInput');
             const message = document.getElementById('message');
@@ -902,6 +922,15 @@
         function updateStats(points) {
             const anomalies = points.filter(p => p.is_anomaly).length;
             
+            const stats = {
+                satelliteCount: points[points.length-1].satCount,
+                signalStrength: points[points.length-1].cno,
+                hdop: points[points.length-1].hdop,
+                speed: points[points.length-1].speed,
+                jammingStatus: detectJamming(points).isJammed,
+                spoofingStatus: detectSpoofing(points).isSpoofed
+            };
+            
             document.getElementById('stats').innerHTML = `
                 <div class="stat-box">
                     <h3>Totalt antall punkter</h3>
@@ -923,6 +952,43 @@
             const fileName = e.target.files[0]?.name || 'Velg NMEA eller CSV-fil';
             document.getElementById('fileLabel').textContent = fileName;
         });
+
+        function parseGSV(line) {
+            // Parse $GPGSV, $GLGSV, $BDGSV for satellittsignalstyrke
+            // Returner: antall satellitter og C/No-verdier
+        }
+
+        function parseGSA(line) {
+            // Parse $GNGSA, $GPGSA for DOP-verdier
+            // Returner: HDOP, PDOP, VDOP og fikseringsstatus
+        }
+
+        function parseRMC(line) {
+            // Parse $GNRMC for hastighet og kurs
+            // Returner: SOG, COG og tidsstempel
+        }
+
+        const warningLevels = {
+            jamming: {
+                color: 'purple',
+                icon: '📡',
+                text: 'Mulig GPS-jamming detektert. Kontroller alternative navigasjonskilder.'
+            },
+            spoofing: {
+                color: 'red',
+                icon: '⚠️',
+                text: 'Mulig GPS-spoofing detektert. Posisjonen kan være forfalsket.'
+            },
+            // ... eksisterende varslingsnivåer ...
+        };
+
+        function createSignalChart(points) {
+            // Ny graf for satellittsignalstyrke
+        }
+
+        function createDOPChart(points) {
+            // Ny graf for DOP-verdier
+        }
     </script>
 </body>
 </html> 
