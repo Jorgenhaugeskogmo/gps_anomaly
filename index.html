@@ -220,6 +220,55 @@
             0% { transform: translateX(-100%); }
             100% { transform: translateX(100%); }
         }
+
+        .warning-legend {
+            background: var(--card);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin: 1rem 0;
+        }
+
+        .warning-level {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .warning-level:last-child {
+            margin-bottom: 0;
+        }
+
+        .warning-level.red {
+            background-color: rgba(244, 67, 54, 0.1);
+        }
+
+        .warning-level.yellow {
+            background-color: rgba(255, 193, 7, 0.1);
+        }
+
+        .warning-level.orange {
+            background-color: rgba(255, 152, 0, 0.1);
+        }
+
+        .warning-level h3 {
+            margin: 0;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .warning-level p {
+            margin: 0.5rem 0 0 0;
+            font-size: 0.9rem;
+            color: var(--text);
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
@@ -249,6 +298,27 @@
         </div>
         
         <div id="map" class="card"></div>
+
+        <div class="warning-legend">
+            <div class="warning-level red">
+                <div>
+                    <h3>🔴 Rød varsling (100m+ avvik / ingen satellittdekning)</h3>
+                    <p>Ingen satellittdekning tilgjengelig. Posisjonen kan ikke fastslås. Kontroller mot helikoptersystemet og konvensjonell radionavigasjon.</p>
+                </div>
+            </div>
+            <div class="warning-level yellow">
+                <div>
+                    <h3>🟡 Gul varsling (~50m avvik / ved grensen på 10 satellitter)</h3>
+                    <p>Posisjonen kan ikke fastslås innenfor grensene 0–50m. Kontroller mot helikoptersystemet og konvensjonell radionavigasjon.</p>
+                </div>
+            </div>
+            <div class="warning-level orange">
+                <div>
+                    <h3>🟠 Oransje varsling (~10–15m avvik / færre enn 6 satellitter)</h3>
+                    <p>Posisjonen kan ikke fastslås innenfor grensene 0–15m. Kontroller mot helikoptersystemet og konvensjonell radionavigasjon.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
