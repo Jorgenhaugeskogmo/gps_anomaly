@@ -380,6 +380,18 @@
                             
                             console.log('Rådata:', { lat, latDir, lon, lonDir });
                             
+                            // Parse tidsstempel fra NMEA (HHMMSS.sss format)
+                            const timeStr = parts[1];
+                            let timestamp = new Date();
+                            if (timeStr && timeStr.length >= 6) {
+                                const hours = parseInt(timeStr.substring(0, 2));
+                                const minutes = parseInt(timeStr.substring(2, 4));
+                                const seconds = parseInt(timeStr.substring(4, 6));
+                                const milliseconds = timeStr.includes('.') ? parseInt(timeStr.split('.')[1]) : 0;
+                                
+                                timestamp.setHours(hours, minutes, seconds, milliseconds);
+                            }
+                            
                             const latitude = convertNMEAtoDecimal(lat, latDir);
                             const longitude = convertNMEAtoDecimal(lon, lonDir);
                             
@@ -389,7 +401,7 @@
                                 points.push({
                                     lat: latitude,
                                     lon: longitude,
-                                    time: new Date().toISOString(),
+                                    time: timestamp.toISOString(),
                                     altitude: parseFloat(parts[9])
                                 });
                                 console.log('Punkt lagt til:', points[points.length - 1]);
@@ -463,21 +475,27 @@
                     if (file.name.endsWith('.csv')) {
                         console.log('Parser CSV-fil');
                         const results = Papa.parse(e.target.result, {
-                            header: false,  // Ingen header i filen
+                            header: false,
                             skipEmptyLines: true,
-                            delimiter: "," // Bruk komma som skilletegn
+                            delimiter: ","
                         });
-                        console.log('CSV-data:', results.data);
-
-                        // Parse data direkte (ingen header å fjerne)
+                        
                         points = results.data
                             .map(row => {
-                                // Fjern eventuelle tomme verdier
                                 const cleanRow = row.filter(val => val.trim() !== '');
                                 if (cleanRow.length < 4) return null;
 
+                                // Prøv å parse tidsstempelet fra første kolonne
+                                let timestamp;
+                                try {
+                                    timestamp = new Date(cleanRow[0]).toISOString();
+                                } catch (e) {
+                                    console.log('Kunne ikke parse tidsstempel:', cleanRow[0]);
+                                    timestamp = new Date().toISOString();
+                                }
+
                                 return {
-                                    time: cleanRow[0],
+                                    time: timestamp,
                                     lat: parseFloat(cleanRow[1].replace(',', '.')),
                                     lon: parseFloat(cleanRow[2].replace(',', '.')),
                                     altitude: parseFloat(cleanRow[3].replace(',', '.'))
@@ -763,6 +781,7 @@
                             callbacks: {
                                 label: function(context) {
                                     const deviation = context.raw;
+                                    const point = points[context.dataIndex]; // Hent det aktuelle punktet
                                     let status = 'Normal';
                                     let warningText = '';
 
@@ -777,7 +796,18 @@
                                         warningText = 'Posisjonen kan ikke fastslås innenfor grensene 0–15m. Kontroller mot helikoptersystemet og konvensjonell radionavigasjon.';
                                     }
 
+                                    // Formater tidsstempel
+                                    const time = point.time ? new Date(point.time).toLocaleString('no-NO', {
+                                        year: 'numeric',
+                                        month: '2-digit',
+                                        day: '2-digit',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        second: '2-digit'
+                                    }) : 'Tidsstempel ikke tilgjengelig';
+
                                     return [
+                                        `Tidspunkt: ${time}`,
                                         `Avvik: ${deviation.toFixed(1)} meter`,
                                         `Status: ${status}`,
                                         warningText ? `⚠️ ${warningText}` : null
