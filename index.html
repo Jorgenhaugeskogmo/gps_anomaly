@@ -750,12 +750,10 @@
                             pan: {
                                 enabled: true,
                                 mode: 'x',
-                                modifierKey: null,  // Ingen tast nødvendig for å panne
-                                speed: 10,
-                                threshold: 10
+                                modifierKey: null
                             },
                             limits: {
-                                x: {min: 'original', max: 'original'}
+                                x: {min: 0, max: 'original'}
                             },
                             zoom: {
                                 wheel: {
@@ -793,6 +791,52 @@
                         intersect: false
                     }
                 }
+            });
+
+            // Håndter vertikalt zoom
+            verticalZoomControls.querySelector('input').addEventListener('input', (e) => {
+                const zoomLevel = e.target.value / 100;
+                const maxDeviation = Math.max(...deviations);
+                
+                // Start med maksimum 100m eller høyeste avvik
+                const startMax = Math.max(100, maxDeviation);
+                
+                // Zoom inn ved å redusere maksimumsverdien
+                const newMax = startMax * (1 - zoomLevel * 0.9);
+                
+                speedChart.options.scales.y = {
+                    beginAtZero: true,
+                    max: newMax,
+                    title: {
+                        display: true,
+                        text: 'Avvik (meter)'
+                    },
+                    ticks: {
+                        stepSize: newMax > 50 ? 10 : newMax > 20 ? 5 : 1
+                    }
+                };
+                
+                speedChart.update('none');
+            });
+
+            // Håndter horisontalt zoom
+            horizontalZoomControls.querySelector('input').addEventListener('input', (e) => {
+                const zoomLevel = e.target.value / 100;
+                const totalPoints = points.length;
+                const visiblePoints = Math.max(10, Math.floor(totalPoints * (1 - zoomLevel * 0.9)));
+                
+                // Behold nåværende midtpunkt hvis det finnes
+                const currentMin = speedChart.scales.x.min || 0;
+                const currentMax = speedChart.scales.x.max || totalPoints;
+                const currentCenter = Math.floor((currentMin + currentMax) / 2);
+                
+                const halfWindow = Math.floor(visiblePoints / 2);
+                const start = Math.max(0, currentCenter - halfWindow);
+                const end = Math.min(totalPoints, currentCenter + halfWindow);
+                
+                speedChart.options.scales.x.min = start;
+                speedChart.options.scales.x.max = end;
+                speedChart.update('none');
             });
         }
 
@@ -878,35 +922,6 @@
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const fileName = e.target.files[0]?.name || 'Velg NMEA eller CSV-fil';
             document.getElementById('fileLabel').textContent = fileName;
-        });
-
-        // Oppdater zoom event handler for å bevare panning-muligheten
-        horizontalZoomControls.querySelector('input').addEventListener('input', (e) => {
-            const zoomLevel = e.target.value / 100;
-            const totalPoints = points.length;
-            const startWindow = totalPoints;
-            const visiblePoints = Math.max(10, Math.floor(startWindow * (1 - zoomLevel * 0.9)));
-            
-            // Beregn nye grenser
-            const halfWindow = Math.floor(visiblePoints / 2);
-            
-            // Behold nåværende midtpunkt hvis det finnes, ellers bruk midten
-            const currentMin = speedChart.scales.x.min;
-            const currentMax = speedChart.scales.x.max;
-            let center;
-            
-            if (currentMin !== undefined && currentMax !== undefined) {
-                center = (currentMin + currentMax) / 2;
-            } else {
-                center = totalPoints / 2;
-            }
-            
-            const start = Math.max(0, center - halfWindow);
-            const end = Math.min(totalPoints, center + halfWindow);
-            
-            speedChart.options.scales.x.min = start;
-            speedChart.options.scales.x.max = end;
-            speedChart.update('none'); // 'none' for å unngå animasjon
         });
     </script>
 </body>
