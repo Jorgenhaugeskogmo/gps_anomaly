@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.1.0/dist/chartjs-plugin-annotation.min.js"></script>
     <style>
         :root {
             --primary: #2196F3;
@@ -485,7 +485,7 @@
             };
 
             // Registrer plugin for annotations
-            Chart.register(ChartAnnotation);
+            Chart.register(ChartJS.annotation);
 
             speedChart = new Chart(ctx, {
                 type: 'line',
