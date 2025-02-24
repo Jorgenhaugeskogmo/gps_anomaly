@@ -684,41 +684,6 @@
             const chartContainer = document.querySelector('.chart-container');
             chartContainer.style.position = 'relative';
 
-            // Legg til CSS for zoom-kontroller
-            const style = document.createElement('style');
-            style.textContent = `
-                .zoom-controls {
-                    position: absolute;
-                    pointer-events: none;
-                }
-                .zoom-controls.vertical {
-                    left: 0;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    height: 200px;
-                    margin-left: 10px;
-                }
-                .zoom-controls.horizontal {
-                    bottom: 20px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    width: 200px;
-                }
-                .zoom-slider {
-                    pointer-events: auto;
-                }
-                .vertical .zoom-slider {
-                    writing-mode: bt-lr;
-                    -webkit-appearance: slider-vertical;
-                    width: 20px;
-                    height: 100%;
-                }
-                .horizontal .zoom-slider {
-                    width: 100%;
-                }
-            `;
-            document.head.appendChild(style);
-
             // Opprett Y-akse zoom kontroll
             const verticalZoomControls = document.createElement('div');
             verticalZoomControls.className = 'zoom-controls vertical';
@@ -743,6 +708,10 @@
             const signalQuality = points.map(p => (p.signalQuality || 0) * (maxDeviation / 60)); // Skaler SNR
             const satelliteCount = points.map(p => (p.satelliteCount || 0) * (maxDeviation / 20)); // Skaler satellitter
 
+            // Registrer zoom plugin
+            const zoomPlugin = window.ChartZoom || Chart.zoom;
+            Chart.register(zoomPlugin);
+
             speedChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -761,25 +730,23 @@
                         tension: 0.1,
                         yAxisID: 'y'
                     }, {
-                        label: 'Signalkvalitet (SNR)',
+                        label: 'Signalkvalitet (skalert)',
                         data: signalQuality,
                         borderColor: 'rgb(75, 192, 192)',
                         borderWidth: 2,
                         borderDash: [5, 5],
                         fill: false,
                         tension: 0.1,
-                        yAxisID: 'y',
-                        hidden: false
+                        yAxisID: 'y'
                     }, {
-                        label: 'Antall satellitter',
+                        label: 'Antall satellitter (skalert)',
                         data: satelliteCount,
                         borderColor: 'rgb(153, 102, 255)',
                         borderWidth: 2,
                         borderDash: [3, 3],
                         fill: false,
                         tension: 0.1,
-                        yAxisID: 'y',
-                        hidden: false
+                        yAxisID: 'y'
                     }]
                 },
                 options: {
@@ -792,9 +759,9 @@
                                     const value = context.raw;
                                     const point = points[context.dataIndex];
                                     
-                                    if (datasetLabel === 'Signalkvalitet (SNR)') {
+                                    if (datasetLabel === 'Signalkvalitet (skalert)') {
                                         return `Signalkvalitet: ${point.signalQuality?.toFixed(1) || 'N/A'}`;
-                                    } else if (datasetLabel === 'Antall satellitter') {
+                                    } else if (datasetLabel === 'Antall satellitter (skalert)') {
                                         return `Satellitter: ${point.satelliteCount || 'N/A'}`;
                                     } else {
                                         // Eksisterende tooltip for avvik
