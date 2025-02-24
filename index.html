@@ -546,13 +546,87 @@
             
             // Beregn avvik
             const deviations = points.map(p => p.deviation);
-
-            // Definer varslingsgrenser
             const thresholds = {
-                red: 100,    // 100m+ avvik
-                yellow: 50,  // opp til 50m avvik
-                orange: 15   // 10-15m avvik
+                red: 100,
+                yellow: 50,
+                orange: 15
             };
+
+            // Opprett zoom-kontroller container
+            const chartContainer = document.querySelector('.chart-container');
+            chartContainer.style.position = 'relative';
+            
+            // Legg til CSS for zoom-kontroller
+            const style = document.createElement('style');
+            style.textContent = `
+                .zoom-controls {
+                    position: absolute;
+                    pointer-events: none;
+                }
+                .zoom-controls.vertical {
+                    left: 0;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    height: 200px;
+                    margin-left: 10px;
+                }
+                .zoom-controls.horizontal {
+                    bottom: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    width: 200px;
+                }
+                .zoom-slider {
+                    pointer-events: auto;
+                }
+                .vertical .zoom-slider {
+                    writing-mode: bt-lr;
+                    -webkit-appearance: slider-vertical;
+                    width: 20px;
+                    height: 100%;
+                }
+                .horizontal .zoom-slider {
+                    width: 100%;
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // Opprett Y-akse zoom kontroll
+            const verticalZoomControls = document.createElement('div');
+            verticalZoomControls.className = 'zoom-controls vertical';
+            verticalZoomControls.innerHTML = `
+                <input type="range" class="zoom-slider" min="0" max="100" value="0" 
+                       title="Zoom Y-akse">
+            `;
+            
+            // Opprett X-akse zoom kontroll
+            const horizontalZoomControls = document.createElement('div');
+            horizontalZoomControls.className = 'zoom-controls horizontal';
+            horizontalZoomControls.innerHTML = `
+                <input type="range" class="zoom-slider" min="0" max="100" value="0" 
+                       title="Zoom X-akse">
+            `;
+            
+            chartContainer.appendChild(verticalZoomControls);
+            chartContainer.appendChild(horizontalZoomControls);
+
+            // Håndter zoom events
+            verticalZoomControls.querySelector('input').addEventListener('input', (e) => {
+                const scale = 1 + (e.target.value / 100);
+                speedChart.options.scales.y.min = -Math.max(...deviations) * (scale - 1);
+                speedChart.options.scales.y.max = Math.max(...deviations) * scale;
+                speedChart.update();
+            });
+
+            horizontalZoomControls.querySelector('input').addEventListener('input', (e) => {
+                const scale = 1 - (e.target.value / 100);
+                const totalPoints = points.length;
+                const visiblePoints = Math.max(10, Math.floor(totalPoints * scale));
+                const start = Math.floor((totalPoints - visiblePoints) / 2);
+                speedChart.options.scales.x.min = start;
+                speedChart.options.scales.x.max = start + visiblePoints;
+                speedChart.update();
+            });
 
             speedChart = new Chart(ctx, {
                 type: 'line',
@@ -563,10 +637,10 @@
                         data: deviations,
                         borderColor: 'rgb(33, 150, 243)',
                         backgroundColor: deviations.map(d => {
-                            if (d > thresholds.red) return 'rgba(244, 67, 54, 0.3)';      // Rød
-                            if (d > thresholds.yellow) return 'rgba(255, 193, 7, 0.3)';   // Gul
-                            if (d > thresholds.orange) return 'rgba(255, 152, 0, 0.3)';   // Oransje
-                            return 'rgba(33, 150, 243, 0.1)';                             // Blå (normal)
+                            if (d > thresholds.red) return 'rgba(244, 67, 54, 0.3)';
+                            if (d > thresholds.yellow) return 'rgba(255, 193, 7, 0.3)';
+                            if (d > thresholds.orange) return 'rgba(255, 152, 0, 0.3)';
+                            return 'rgba(33, 150, 243, 0.1)';
                         }),
                         fill: true,
                         tension: 0.1
@@ -661,7 +735,9 @@
                             title: {
                                 display: true,
                                 text: 'Punktnummer'
-                            }
+                            },
+                            min: 0,
+                            max: points.length
                         }
                     }
                 }
