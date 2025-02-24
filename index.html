@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
     <style>
         :root {
             --primary: #2196F3;
@@ -476,6 +477,13 @@
             // Beregn avvik
             const deviations = points.map(p => p.deviation);
 
+            // Definer varslingsgrenser
+            const thresholds = {
+                red: 100,    // 100m+ avvik
+                orange: 15,  // 10-15m avvik
+                yellow: 50   // opp til 50m avvik
+            };
+
             speedChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -484,9 +492,12 @@
                         label: 'Avvik fra gjennomsnitt (meter)',
                         data: deviations,
                         borderColor: 'rgb(33, 150, 243)',
-                        backgroundColor: points.map(p => 
-                            p.is_anomaly ? 'rgba(244, 67, 54, 0.5)' : 'rgba(33, 150, 243, 0.1)'
-                        ),
+                        backgroundColor: points.map(p => {
+                            if (p.deviation > thresholds.red) return 'rgba(244, 67, 54, 0.5)';  // Rød
+                            if (p.deviation > thresholds.yellow) return 'rgba(255, 193, 7, 0.5)';  // Gul
+                            if (p.deviation > thresholds.orange) return 'rgba(255, 152, 0, 0.5)';  // Oransje
+                            return 'rgba(33, 150, 243, 0.1)';  // Normal (blå)
+                        }),
                         fill: true,
                         tension: 0.1
                     }]
@@ -495,48 +506,71 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        zoom: {
-                            pan: {
-                                enabled: true,
-                                mode: 'x',
-                                modifierKey: 'ctrl',
-                            },
-                            zoom: {
-                                wheel: {
-                                    enabled: true,
+                        annotation: {
+                            annotations: {
+                                redLine: {
+                                    type: 'line',
+                                    yMin: thresholds.red,
+                                    yMax: thresholds.red,
+                                    borderColor: 'rgb(244, 67, 54)',
+                                    borderWidth: 2,
+                                    label: {
+                                        content: '🔴 Rød varsling (100m+)',
+                                        enabled: true,
+                                        position: 'right'
+                                    }
                                 },
-                                pinch: {
-                                    enabled: true
+                                yellowLine: {
+                                    type: 'line',
+                                    yMin: thresholds.yellow,
+                                    yMax: thresholds.yellow,
+                                    borderColor: 'rgb(255, 193, 7)',
+                                    borderWidth: 2,
+                                    label: {
+                                        content: '🟡 Gul varsling (50m)',
+                                        enabled: true,
+                                        position: 'right'
+                                    }
                                 },
-                                mode: 'x',
-                                drag: {
-                                    enabled: true,
-                                    backgroundColor: 'rgba(33, 150, 243, 0.2)',
-                                    borderColor: 'rgb(33, 150, 243)',
-                                    borderWidth: 1
+                                orangeLine: {
+                                    type: 'line',
+                                    yMin: thresholds.orange,
+                                    yMax: thresholds.orange,
+                                    borderColor: 'rgb(255, 152, 0)',
+                                    borderWidth: 2,
+                                    label: {
+                                        content: '🟠 Oransje varsling (15m)',
+                                        enabled: true,
+                                        position: 'right'
+                                    }
                                 }
-                            }
-                        },
-                        title: {
-                            display: true,
-                            text: [
-                                'Posisjonsavvik fra gjennomsnitt',
-                                'Dra for å zoome, Ctrl+dra for å panorere, dobbeltklikk for å nullstille'
-                            ],
-                            font: {
-                                size: 16,
-                                family: "'Inter', sans-serif"
                             }
                         },
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
                                     const point = points[context.dataIndex];
+                                    const deviation = deviations[context.dataIndex];
+                                    let status = 'Normal';
+                                    let warningText = '';
+
+                                    if (deviation > thresholds.red) {
+                                        status = '🔴 Rød varsling';
+                                        warningText = 'Ingen satellittdekning tilgjengelig. Posisjonen kan ikke fastslås. Kontroller mot helikoptersystemet og konvensjonell radionavigasjon.';
+                                    } else if (deviation > thresholds.yellow) {
+                                        status = '🟡 Gul varsling';
+                                        warningText = 'Posisjonen kan ikke fastslås innenfor grensene 0–50m. Kontroller mot helikoptersystemet og konvensjonell radionavigasjon.';
+                                    } else if (deviation > thresholds.orange) {
+                                        status = '🟠 Oransje varsling';
+                                        warningText = 'Posisjonen kan ikke fastslås innenfor grensene 0–15m. Kontroller mot helikoptersystemet og konvensjonell radionavigasjon.';
+                                    }
+
                                     return [
-                                        `Avvik: ${deviations[context.dataIndex].toFixed(1)} meter`,
-                                        `Status: ${point.is_anomaly ? 'Anomali' : 'Normal'}`,
-                                        `Tid: ${point.time}`
-                                    ];
+                                        `Avvik: ${deviation.toFixed(1)} meter`,
+                                        `Status: ${status}`,
+                                        `Tid: ${point.time}`,
+                                        warningText ? `Varsling: ${warningText}` : null
+                                    ].filter(Boolean);
                                 }
                             }
                         }
@@ -555,10 +589,6 @@
                                 text: 'Punktnummer'
                             }
                         }
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
                     }
                 }
             });
