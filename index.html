@@ -962,6 +962,16 @@
             }
         }
 
+        function formatTime(timeString) {
+            if (!timeString) return 'N/A';
+            try {
+                const date = new Date(timeString);
+                return date.toLocaleTimeString('no-NO');
+            } catch (e) {
+                return timeString;
+            }
+        }
+
         function updateMap(points) {
             clearMap();
             
