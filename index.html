@@ -779,7 +779,7 @@
                 const fullscreenControl = document.createElement('div');
                 fullscreenControl.className = 'mapboxgl-ctrl mapboxgl-ctrl-group';
                 fullscreenControl.innerHTML = `
-                    <button title="Åpne i fullskjerm" style="padding: 0 5px;">
+                    <button title="Fullskjerm" style="padding: 0 5px;">
                         <span>⛶</span>
                     </button>
                 `;
@@ -787,100 +787,52 @@
                 // Legg til fullskjerm-knapp
                 const fullscreenButton = fullscreenControl.querySelector('button');
                 fullscreenButton.addEventListener('click', () => {
-                    // Lagre nåværende kartposisjon og zoom
-                    const center = map.getCenter();
-                    const zoom = map.getZoom();
-                    const style = map.getStyle().name;
-                    
-                    // Åpne i ny fane
-                    const mapUrl = `https://api.mapbox.com/styles/v1/mapbox/${style.includes('satellite') ? 'satellite-streets-v12' : 'streets-v12'}/static/${center.lng},${center.lat},${zoom},0/1200x800?access_token=${mapboxgl.accessToken}`;
-                    
-                    // Opprett en HTML-side med kartet
-                    const fullscreenHtml = `
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <meta charset="utf-8">
-                            <title>GPS Tracker - Fullskjerm kart</title>
-                            <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
-                            <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
-                            <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
-                            <style>
-                                body { margin: 0; padding: 0; }
-                                #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-                                .marker {
-                                    cursor: pointer;
-                                    box-shadow: 0 0 5px rgba(0,0,0,0.3);
-                                    border-radius: 50%;
-                                    border: 2px solid white;
-                                }
-                            </style>
-                        </head>
-                        <body>
-                            <div id="map"></div>
-                            <script>
-                                mapboxgl.accessToken = '${mapboxgl.accessToken}';
-                                const map = new mapboxgl.Map({
-                                    container: 'map',
-                                    style: 'mapbox://styles/mapbox/${style.includes('satellite') ? 'satellite-streets-v12' : 'streets-v12'}',
-                                    center: [${center.lng}, ${center.lat}],
-                                    zoom: ${zoom}
-                                });
-                                
-                                map.addControl(new mapboxgl.NavigationControl());
-                                map.addControl(new mapboxgl.ScaleControl());
-                                
-                                // Hent data fra foreldrevinduet
-                                const routeData = ${JSON.stringify(map.getSource('route')._data)};
-                                
-                                map.on('load', function() {
-                                    map.addSource('route', {
-                                        type: 'geojson',
-                                        data: routeData
-                                    });
-                                    
-                                    map.addLayer({
-                                        id: 'route-line',
-                                        type: 'line',
-                                        source: 'route',
-                                        layout: {
-                                            'line-join': 'round',
-                                            'line-cap': 'round'
-                                        },
-                                        paint: {
-                                            'line-color': '#2196F3',
-                                            'line-width': 3,
-                                            'line-opacity': 0.8
-                                        }
-                                    });
-                                    
-                                    // Legg til markører
-                                    const markers = [];
-                                    if (routeData.geometry && routeData.geometry.coordinates) {
-                                        routeData.geometry.coordinates.forEach((coord, index) => {
-                                            const el = document.createElement('div');
-                                            el.className = 'marker';
-                                            el.style.backgroundColor = '#2196F3';
-                                            el.style.width = '10px';
-                                            el.style.height = '10px';
-                                            
-                                            const marker = new mapboxgl.Marker(el)
-                                                .setLngLat(coord)
-                                                .addTo(map);
-                                            
-                                            markers.push(marker);
-                                        });
-                                    }
-                                });
-                            </script>
-                        </body>
-                        </html>
-                    `;
-                    
-                    // Åpne i ny fane
-                    const newWindow = window.open('', '_blank');
-                    newWindow.document.write(fullscreenHtml);
-                    newWindow.document.close();
+                    try {
+                        const mapContainer = document.getElementById('map');
+                        
+                        if (!document.fullscreenElement) {
+                            // Gå til fullskjerm
+                            if (mapContainer.requestFullscreen) {
+                                mapContainer.requestFullscreen();
+                            } else if (mapContainer.mozRequestFullScreen) { // Firefox
+                                mapContainer.mozRequestFullScreen();
+                            } else if (mapContainer.webkitRequestFullscreen) { // Chrome, Safari og Opera
+                                mapContainer.webkitRequestFullscreen();
+                            } else if (mapContainer.msRequestFullscreen) { // IE/Edge
+                                mapContainer.msRequestFullscreen();
+                            }
+                            fullscreenButton.innerHTML = '<span>⛶</span>';
+                        } else {
+                            // Avslutt fullskjerm
+                            if (document.exitFullscreen) {
+                                document.exitFullscreen();
+                            } else if (document.mozCancelFullScreen) {
+                                document.mozCancelFullScreen();
+                            } else if (document.webkitExitFullscreen) {
+                                document.webkitExitFullscreen();
+                            } else if (document.msExitFullscreen) {
+                                document.msExitFullscreen();
+                            }
+                            fullscreenButton.innerHTML = '<span>⛶</span>';
+                        }
+                        
+                        // Oppdater kartet når fullskjerm endres
+                        document.addEventListener('fullscreenchange', () => {
+                            map.resize();
+                        });
+                        document.addEventListener('webkitfullscreenchange', () => {
+                            map.resize();
+                        });
+                        document.addEventListener('mozfullscreenchange', () => {
+                            map.resize();
+                        });
+                        document.addEventListener('MSFullscreenChange', () => {
+                            map.resize();
+                        });
+                    } catch (e) {
+                        console.error('Feil ved aktivering av fullskjerm:', e);
+                        alert('Kunne ikke aktivere fullskjerm: ' + e.message);
+                    }
                 });
 
                 // Legg til fullskjerm-knapp i kartet
