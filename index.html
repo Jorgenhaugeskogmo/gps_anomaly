@@ -652,296 +652,74 @@
             reader.readAsText(file);
         }
 
-        // Initialiser kartet
-        let map = L.map('map').setView([63.4305, 10.3951], 5);  // Sentrer på Norge
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-
-        let markers = [];  // Hold styr på alle markører
-        let speedChart = null;
+        function initMap() {
+            mapboxgl.accessToken = 'pk.eyJ1Ijoiam9lc2tvIiwiYSI6ImNtN2s5MmZ0aTA5ejcybnFzNWtneDd6ZG4ifQ.CUUAVkpdyHdG0xdJ5dUK-Q';
+            
+            map = new mapboxgl.Map({
+                container: 'map',
+                style: 'mapbox://styles/mapbox/streets-v12',
+                center: [10.7522, 59.9139], // Oslo som standard
+                zoom: 10
+            });
+            
+            // Legg til navigasjonskontroller
+            map.addControl(new mapboxgl.NavigationControl());
+            
+            // Legg til skala
+            map.addControl(new mapboxgl.ScaleControl({
+                maxWidth: 200,
+                unit: 'metric'
+            }));
+            
+            // Opprett en tom kilde for ruten
+            map.on('load', function() {
+                map.addSource('route', {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        properties: {},
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: []
+                        }
+                    }
+                });
+                
+                map.addLayer({
+                    id: 'route-line',
+                    type: 'line',
+                    source: 'route',
+                    layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    paint: {
+                        'line-color': '#2196F3',
+                        'line-width': 3,
+                        'line-opacity': 0.8
+                    }
+                });
+            });
+        }
 
         function clearMap() {
-            markers.forEach(marker => marker.remove());
-            markers = [];
-        }
-
-        function formatSpeed(speed) {
-            return speed.toFixed(1) + ' km/t';
-        }
-
-        function createSpeedChart(points) {
-            const ctx = document.getElementById('speedChart').getContext('2d');
-            
-            if (speedChart) {
-                speedChart.destroy();
-            }
-            
-            // Beregn avvik
-            const deviations = points.map(p => p.deviation);
-            const thresholds = {
-                red: 100,
-                yellow: 50,
-                orange: 15
-            };
-
-            // Opprett zoom-kontroller container
-            const chartContainer = document.querySelector('.chart-container');
-            chartContainer.style.position = 'relative';
-
-            // Opprett Y-akse zoom kontroll
-            const verticalZoomControls = document.createElement('div');
-            verticalZoomControls.className = 'zoom-controls vertical';
-            verticalZoomControls.innerHTML = `
-                <input type="range" class="zoom-slider" min="0" max="100" value="0" 
-                       title="Zoom Y-akse">
-            `;
-
-            // Opprett X-akse zoom kontroll
-            const horizontalZoomControls = document.createElement('div');
-            horizontalZoomControls.className = 'zoom-controls horizontal';
-            horizontalZoomControls.innerHTML = `
-                <input type="range" class="zoom-slider" min="0" max="100" value="0" 
-                       title="Zoom X-akse">
-            `;
-
-            chartContainer.appendChild(verticalZoomControls);
-            chartContainer.appendChild(horizontalZoomControls);
-
-            // Skaler signalkvalitet og satellittantall for å passe i samme graf
-            const maxDeviation = Math.max(...deviations, 100);
-            const signalQuality = points.map(p => (p.signalQuality || 0) * (maxDeviation / 60)); // Skaler SNR
-            const satelliteCount = points.map(p => (p.satelliteCount || 0) * (maxDeviation / 20)); // Skaler satellitter
-
-            // Registrer zoom plugin
-            const zoomPlugin = window.ChartZoom || Chart.zoom;
-            Chart.register(zoomPlugin);
-
-            speedChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: points.map((_, i) => i + 1),
-                    datasets: [{
-                        label: 'Posisjonsavvik',
-                        data: deviations,
-                        borderColor: 'rgb(33, 150, 243)',
-                        backgroundColor: deviations.map(d => {
-                            if (d > thresholds.red) return 'rgba(244, 67, 54, 0.3)';
-                            if (d > thresholds.yellow) return 'rgba(255, 193, 7, 0.3)';
-                            if (d > thresholds.orange) return 'rgba(255, 152, 0, 0.3)';
-                            return 'rgba(33, 150, 243, 0.1)';
-                        }),
-                        fill: true,
-                        tension: 0.1,
-                        yAxisID: 'y'
-                    }, {
-                        label: 'Signalkvalitet (skalert)',
-                        data: signalQuality,
-                        borderColor: 'rgb(75, 192, 192)',
-                        borderWidth: 2,
-                        borderDash: [5, 5],
-                        fill: false,
-                        tension: 0.1,
-                        yAxisID: 'y'
-                    }, {
-                        label: 'Antall satellitter (skalert)',
-                        data: satelliteCount,
-                        borderColor: 'rgb(153, 102, 255)',
-                        borderWidth: 2,
-                        borderDash: [3, 3],
-                        fill: false,
-                        tension: 0.1,
-                        yAxisID: 'y'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const datasetLabel = context.dataset.label;
-                                    const value = context.raw;
-                                    const point = points[context.dataIndex];
-                                    
-                                    if (datasetLabel === 'Signalkvalitet (skalert)') {
-                                        return `Signalkvalitet: ${point.signalQuality?.toFixed(1) || 'N/A'}`;
-                                    } else if (datasetLabel === 'Antall satellitter (skalert)') {
-                                        return `Satellitter: ${point.satelliteCount || 'N/A'}`;
-                                    } else {
-                                        // Eksisterende tooltip for avvik
-                                        const deviation = value;
-                                        let status = 'Normal';
-                                        let warningText = '';
-                                        
-                                        if (deviation > thresholds.red) {
-                                            status = '🔴 Rød varsling';
-                                            warningText = 'Ingen satellittdekning tilgjengelig. Posisjonen kan ikke fastslås. Kontroller mot helikoptersystemet og konvensjonell radionavigasjon.';
-                                        } else if (deviation > thresholds.yellow) {
-                                            status = '🟡 Gul varsling';
-                                            warningText = 'Posisjonen kan ikke fastslås innenfor grensene 0–50m. Kontroller mot helikoptersystemet og konvensjonell radionavigasjon.';
-                                        } else if (deviation > thresholds.orange) {
-                                            status = '🟠 Oransje varsling';
-                                            warningText = 'Posisjonen kan ikke fastslås innenfor grensene 0–15m. Kontroller mot helikoptersystemet og konvensjonell radionavigasjon.';
-                                        }
-                                        
-                                        // Formater tidsstempel
-                                        const time = point.time ? new Date(point.time).toLocaleString('no-NO', {
-                                            year: 'numeric',
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                            second: '2-digit'
-                                        }) : 'Tidsstempel ikke tilgjengelig';
-                                        
-                                        return [
-                                            `Tidspunkt: ${time}`,
-                                            `Avvik: ${deviation.toFixed(1)} meter`,
-                                            `Status: ${status}`,
-                                            warningText ? `⚠️ ${warningText}` : null,
-                                            `Satellitter: ${point.satelliteCount || 'N/A'}`,
-                                            `SNR: ${point.signalQuality?.toFixed(1) || 'N/A'}`
-                                        ].filter(Boolean);
-                                    }
-                                }
-                            }
-                        },
-                        annotation: {
-                            annotations: {
-                                redLine: {
-                                    type: 'line',
-                                    yMin: thresholds.red,
-                                    yMax: thresholds.red,
-                                    borderColor: 'rgb(244, 67, 54)',
-                                    borderWidth: 2,
-                                    borderDash: [10, 5],
-                                    label: {
-                                        enabled: true,
-                                        content: 'Rød varsling (100m)',
-                                        position: 'end'
-                                    }
-                                },
-                                yellowLine: {
-                                    type: 'line',
-                                    yMin: thresholds.yellow,
-                                    yMax: thresholds.yellow,
-                                    borderColor: 'rgb(255, 193, 7)',
-                                    borderWidth: 2,
-                                    borderDash: [10, 5],
-                                    label: {
-                                        enabled: true,
-                                        content: 'Gul varsling (50m)',
-                                        position: 'end'
-                                    }
-                                },
-                                orangeLine: {
-                                    type: 'line',
-                                    yMin: thresholds.orange,
-                                    yMax: thresholds.orange,
-                                    borderColor: 'rgb(255, 152, 0)',
-                                    borderWidth: 2,
-                                    borderDash: [10, 5],
-                                    label: {
-                                        enabled: true,
-                                        content: 'Oransje varsling (15m)',
-                                        position: 'end'
-                                    }
-                                }
-                            }
-                        },
-                        zoom: {
-                            pan: {
-                                enabled: true,
-                                mode: 'x',
-                                modifierKey: null
-                            },
-                            limits: {
-                                x: {min: 0, max: 'original'}
-                            },
-                            zoom: {
-                                wheel: {
-                                    enabled: false
-                                },
-                                pinch: {
-                                    enabled: false
-                                },
-                                drag: {
-                                    enabled: false
-                                }
-                            }
+            if (map) {
+                // Fjern alle markører
+                markers.forEach(marker => marker.remove());
+                markers = [];
+                
+                // Tøm ruten hvis den finnes
+                if (map.getSource('route')) {
+                    map.getSource('route').setData({
+                        type: 'Feature',
+                        properties: {},
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: []
                         }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Avvik (meter)'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Punktnummer'
-                            },
-                            min: 0,
-                            max: points.length
-                        }
-                    },
-                    interaction: {
-                        mode: 'nearest',
-                        axis: 'x',
-                        intersect: false
-                    }
+                    });
                 }
-            });
-
-            // Håndter vertikalt zoom
-            verticalZoomControls.querySelector('input').addEventListener('input', (e) => {
-                const zoomLevel = e.target.value / 100;
-                const maxDeviation = Math.max(...deviations);
-                
-                // Start med maksimum 100m eller høyeste avvik
-                const startMax = Math.max(100, maxDeviation);
-                
-                // Zoom inn ved å redusere maksimumsverdien
-                const newMax = startMax * (1 - zoomLevel * 0.9);
-                
-                speedChart.options.scales.y = {
-                    beginAtZero: true,
-                    max: newMax,
-                    title: {
-                        display: true,
-                        text: 'Avvik (meter)'
-                    },
-                    ticks: {
-                        stepSize: newMax > 50 ? 10 : newMax > 20 ? 5 : 1
-                    }
-                };
-                
-                speedChart.update('none');
-            });
-
-            // Håndter horisontalt zoom
-            horizontalZoomControls.querySelector('input').addEventListener('input', (e) => {
-                const zoomLevel = e.target.value / 100;
-                const totalPoints = points.length;
-                const visiblePoints = Math.max(10, Math.floor(totalPoints * (1 - zoomLevel * 0.9)));
-                
-                // Behold nåværende midtpunkt hvis det finnes
-                const currentMin = speedChart.scales.x.min || 0;
-                const currentMax = speedChart.scales.x.max || totalPoints;
-                const currentCenter = Math.floor((currentMin + currentMax) / 2);
-                
-                const halfWindow = Math.floor(visiblePoints / 2);
-                const start = Math.max(0, currentCenter - halfWindow);
-                const end = Math.min(totalPoints, currentCenter + halfWindow);
-                
-                speedChart.options.scales.x.min = start;
-                speedChart.options.scales.x.max = end;
-                speedChart.update('none');
-            });
+            }
         }
 
         function updateMap(points) {
@@ -952,9 +730,11 @@
                 return;
             }
             
-            // Vent til kartet er lastet
-            if (!map.loaded()) {
-                map.on('load', () => updateMapData(points));
+            // Sjekk om kartet er lastet
+            if (!map.loaded && !map.isStyleLoaded()) {
+                map.once('load', function() {
+                    updateMapData(points);
+                });
             } else {
                 updateMapData(points);
             }
