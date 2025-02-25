@@ -11,6 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
     <style>
         :root {
             --primary: #2196F3;
@@ -130,10 +131,8 @@
         }
 
         #map {
-            height: 600px;
+            height: 500px;
             width: 100%;
-            border-radius: var(--border-radius);
-            z-index: 1;
         }
 
         .stats {
@@ -309,6 +308,11 @@
         .horizontal .zoom-slider {
             width: 100%;
         }
+
+        .marker {
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+        }
     </style>
 </head>
 <body>
@@ -362,6 +366,7 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
     <script>
         function convertNMEAtoDecimal(value, direction) {
             if (!value || !direction) {
@@ -942,60 +947,81 @@
         function updateMap(points) {
             clearMap();
             
-            console.log('Oppdaterer kart med punkter:', points);
-            
-            const latlngs = points.map(point => {
-                console.log('Punkt:', point);
-                return [point.lat, point.lon];
-            });
-            
-            console.log('LatLngs:', latlngs);
-            
-            if (latlngs.length === 0) {
+            if (points.length === 0) {
                 console.error('Ingen gyldige koordinater å vise på kartet');
                 return;
             }
+            
+            // Vent til kartet er lastet
+            if (!map.loaded()) {
+                map.on('load', () => updateMapData(points));
+            } else {
+                updateMapData(points);
+            }
+        }
 
-            // Tegn linje mellom punktene
-            const polyline = L.polyline(latlngs, {
-                color: 'blue',
-                weight: 3,
-                opacity: 0.7
-            }).addTo(map);
-            markers.push(polyline);
+        function updateMapData(points) {
+            // Opprett GeoJSON for ruten
+            const routeData = {
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'LineString',
+                    coordinates: points.map(point => [point.lon, point.lat])
+                }
+            };
+            
+            // Legg til ruten som kilde
+            map.getSource('route').setData(routeData);
             
             // Legg til markører for hvert punkt
             points.forEach((point, index) => {
-                const marker = L.circleMarker([point.lat, point.lon], {
-                    radius: 6,
-                    fillColor: point.is_anomaly ? '#f44336' : // Rød for anomalier
+                // Bestem farge basert på punkttype
+                const color = point.is_anomaly ? '#f44336' : // Rød for anomalier
                               index === 0 ? '#4CAF50' : // Grønn for start
                               index === points.length - 1 ? '#FFA000' : // Oransje for slutt
-                              '#2196F3', // Blå for normale punkter
-                    color: '#fff',
-                    weight: 1,
-                    opacity: 1,
-                    fillOpacity: 0.8
-                }).addTo(map);
+                              '#2196F3'; // Blå for normale punkter
                 
-                marker.bindPopup(`
-                    <strong>${point.is_anomaly ? 'ANOMALI' : 'Normalt punkt'}</strong><br>
-                    Punkt ${index + 1} av ${points.length}<br>
-                    Tid: ${point.time}<br>
-                    Lat: ${point.lat.toFixed(6)}<br>
-                    Lon: ${point.lon.toFixed(6)}
-                    ${point.altitude ? '<br>Høyde: ' + point.altitude.toFixed(1) + 'm' : ''}
-                `);
+                // Opprett popup
+                const popup = new mapboxgl.Popup({ offset: 25 })
+                    .setHTML(`
+                        <strong>${point.is_anomaly ? 'ANOMALI' : 'Normalt punkt'}</strong><br>
+                        Punkt ${index + 1} av ${points.length}<br>
+                        Tid: ${point.time}<br>
+                        Lat: ${point.lat.toFixed(6)}<br>
+                        Lon: ${point.lon.toFixed(6)}
+                        ${point.altitude ? '<br>Høyde: ' + point.altitude.toFixed(1) + 'm' : ''}
+                        ${point.satelliteCount ? '<br>Satellitter: ' + point.satelliteCount : ''}
+                        ${point.signalQuality ? '<br>SNR: ' + point.signalQuality.toFixed(1) : ''}
+                    `);
+                
+                // Opprett markør-element
+                const el = document.createElement('div');
+                el.className = 'marker';
+                el.style.backgroundColor = color;
+                el.style.width = '12px';
+                el.style.height = '12px';
+                el.style.borderRadius = '50%';
+                el.style.border = '2px solid white';
+                
+                // Legg til markør
+                const marker = new mapboxgl.Marker(el)
+                    .setLngLat([point.lon, point.lat])
+                    .setPopup(popup)
+                    .addTo(map);
                 
                 markers.push(marker);
             });
             
-            try {
-                // Zoom til alle punktene
-                map.fitBounds(latlngs);
-            } catch (e) {
-                console.error('Feil ved zoom til punkter:', e);
-            }
+            // Zoom til alle punktene
+            const bounds = new mapboxgl.LngLatBounds();
+            points.forEach(point => {
+                bounds.extend([point.lon, point.lat]);
+            });
+            
+            map.fitBounds(bounds, {
+                padding: 50
+            });
         }
 
         function updateStats(points) {
