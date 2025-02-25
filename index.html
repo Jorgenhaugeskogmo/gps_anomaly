@@ -657,53 +657,66 @@
         }
 
         function initMap() {
-            mapboxgl.accessToken = 'pk.eyJ1Ijoiam9lc2tvIiwiYSI6ImNtN2s5MmZ0aTA5ejcybnFzNWtneDd6ZG4ifQ.CUUAVkpdyHdG0xdJ5dUK-Q';
-            
-            map = new mapboxgl.Map({
-                container: 'map',
-                style: 'mapbox://styles/mapbox/streets-v12',
-                center: [10.7522, 59.9139], // Oslo som standard
-                zoom: 10
-            });
-            
-            // Legg til navigasjonskontroller
-            map.addControl(new mapboxgl.NavigationControl());
-            
-            // Legg til skala
-            map.addControl(new mapboxgl.ScaleControl({
-                maxWidth: 200,
-                unit: 'metric'
-            }));
-            
-            // Opprett en tom kilde for ruten
-            map.on('load', function() {
-                map.addSource('route', {
-                    type: 'geojson',
-                    data: {
-                        type: 'Feature',
-                        properties: {},
-                        geometry: {
-                            type: 'LineString',
-                            coordinates: []
-                        }
-                    }
+            try {
+                mapboxgl.accessToken = 'pk.eyJ1Ijoiam9lc2tvIiwiYSI6ImNtN2s5MmZ0aTA5ejcybnFzNWtneDd6ZG4ifQ.CUUAVkpdyHdG0xdJ5dUK-Q';
+                
+                map = new mapboxgl.Map({
+                    container: 'map',
+                    style: 'mapbox://styles/mapbox/streets-v12',
+                    center: [10.7522, 59.9139], // Oslo som standard
+                    zoom: 10
                 });
                 
-                map.addLayer({
-                    id: 'route-line',
-                    type: 'line',
-                    source: 'route',
-                    layout: {
-                        'line-join': 'round',
-                        'line-cap': 'round'
-                    },
-                    paint: {
-                        'line-color': '#2196F3',
-                        'line-width': 3,
-                        'line-opacity': 0.8
-                    }
+                console.log('Kart initialisert');
+                
+                // Legg til navigasjonskontroller
+                map.addControl(new mapboxgl.NavigationControl());
+                
+                // Legg til skala
+                map.addControl(new mapboxgl.ScaleControl({
+                    maxWidth: 200,
+                    unit: 'metric'
+                }));
+                
+                // Opprett en tom kilde for ruten
+                map.on('load', function() {
+                    console.log('Kart lastet');
+                    map.addSource('route', {
+                        type: 'geojson',
+                        data: {
+                            type: 'Feature',
+                            properties: {},
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: []
+                            }
+                        }
+                    });
+                    
+                    map.addLayer({
+                        id: 'route-line',
+                        type: 'line',
+                        source: 'route',
+                        layout: {
+                            'line-join': 'round',
+                            'line-cap': 'round'
+                        },
+                        paint: {
+                            'line-color': '#2196F3',
+                            'line-width': 3,
+                            'line-opacity': 0.8
+                        }
+                    });
                 });
-            });
+            } catch (e) {
+                console.error('Feil ved initialisering av kart:', e);
+                document.getElementById('map').innerHTML = `
+                    <div style="padding: 20px; text-align: center;">
+                        <h3>Kunne ikke laste kartet</h3>
+                        <p>Feilmelding: ${e.message}</p>
+                    </div>
+                `;
+            }
         }
 
         function clearMap() {
@@ -1312,6 +1325,18 @@
                 speedChart.update('none');
             });
         }
+
+        // Legg til rett etter <script> taggen
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialiser kartet når siden er lastet
+            initMap();
+            
+            // Oppdater file input label
+            document.getElementById('fileInput').addEventListener('change', function(e) {
+                const fileName = e.target.files[0]?.name || 'Velg NMEA eller CSV-fil';
+                document.getElementById('fileLabel').textContent = fileName;
+            });
+        });
     </script>
 </body>
 </html> 
