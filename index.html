@@ -662,8 +662,8 @@
                 
                 map = new mapboxgl.Map({
                     container: 'map',
-                    style: 'mapbox://styles/mapbox/streets-v12',
-                    center: [10.7522, 59.9139], // Oslo som standard
+                    style: 'mapbox://styles/mapbox/satellite-streets-v12',
+                    center: [10.7522, 59.9139],
                     zoom: 10
                 });
                 
@@ -677,6 +677,72 @@
                     maxWidth: 200,
                     unit: 'metric'
                 }));
+                
+                // Legg til stilvelger
+                map.addControl(new mapboxgl.NavigationControl({
+                    visualizePitch: true
+                }));
+                
+                // Legg til stilvelger
+                const styleControl = document.createElement('div');
+                styleControl.className = 'mapboxgl-ctrl mapboxgl-ctrl-group';
+                styleControl.innerHTML = `
+                    <button title="Bytt kartstil" style="padding: 0 5px;">
+                        <span>🌎</span>
+                    </button>
+                `;
+                
+                // Legg til stilvelger-knapp
+                const styleButton = styleControl.querySelector('button');
+                let currentStyle = 'satellite';
+                
+                styleButton.addEventListener('click', () => {
+                    if (currentStyle === 'satellite') {
+                        map.setStyle('mapbox://styles/mapbox/streets-v12');
+                        styleButton.innerHTML = '<span>🛰️</span>';
+                        currentStyle = 'streets';
+                    } else {
+                        map.setStyle('mapbox://styles/mapbox/satellite-streets-v12');
+                        styleButton.innerHTML = '<span>🌎</span>';
+                        currentStyle = 'satellite';
+                    }
+                    
+                    // Gjenopprett ruten og markører etter stilendring
+                    map.once('style.load', () => {
+                        // Gjenopprett ruten
+                        if (!map.getSource('route')) {
+                            map.addSource('route', {
+                                type: 'geojson',
+                                data: {
+                                    type: 'Feature',
+                                    properties: {},
+                                    geometry: {
+                                        type: 'LineString',
+                                        coordinates: []
+                                    }
+                                }
+                            });
+                            
+                            map.addLayer({
+                                id: 'route-line',
+                                type: 'line',
+                                source: 'route',
+                                layout: {
+                                    'line-join': 'round',
+                                    'line-cap': 'round'
+                                },
+                                paint: {
+                                    'line-color': '#2196F3',
+                                    'line-width': 3,
+                                    'line-opacity': 0.8
+                                }
+                            });
+                        }
+                    });
+                });
+                
+                // Legg til stilvelger i kartet
+                document.querySelector('.mapboxgl-ctrl-top-right').appendChild(styleControl);
                 
                 // Opprett en tom kilde for ruten
                 map.on('load', function() {
