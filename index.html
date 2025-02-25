@@ -313,6 +313,100 @@
             cursor: pointer;
             box-shadow: 0 0 5px rgba(0,0,0,0.3);
         }
+
+        .timeline-container {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--card);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        .timeline-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        #timelineSlider {
+            flex: 1;
+            height: 8px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: #ddd;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        #timelineSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+        }
+
+        #timelineSlider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+        }
+
+        #playButton {
+            background: var(--primary);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #currentTime {
+            min-width: 150px;
+            font-weight: 500;
+        }
+
+        #playbackSpeed {
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .export-container {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: var(--card);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .export-button {
+            padding: 0.5rem 1rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .export-button:hover {
+            filter: brightness(1.1);
+        }
     </style>
 </head>
 <body>
@@ -869,6 +963,8 @@
         }
 
         function updateMap(points) {
+            clearMap();
+            
             if (points.length === 0) {
                 console.error('Ingen gyldige koordinater å vise på kartet');
                 return;
@@ -891,6 +987,31 @@
                 clearMap();
                 updateMapData(points);
             }
+            
+            // Legg til tidslinje-kontroll
+            const timelineContainer = document.createElement('div');
+            timelineContainer.className = 'timeline-container';
+            timelineContainer.innerHTML = `
+                <div class="timeline-controls">
+                    <button id="playButton" title="Spill av/Pause"><span>▶️</span></button>
+                    <input type="range" id="timelineSlider" min="0" max="${points.length - 1}" value="0" step="1">
+                    <span id="currentTime">Tid: ${formatTime(points[0].time)}</span>
+                    <select id="playbackSpeed">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="2">2x</option>
+                        <option value="5">5x</option>
+                        <option value="10">10x</option>
+                    </select>
+                </div>
+            `;
+            
+            // Legg til tidslinje under kartet
+            const mapContainer = document.getElementById('map').parentElement;
+            mapContainer.appendChild(timelineContainer);
+            
+            // Initialiser tidslinje-funksjonalitet
+            initTimeline(points);
         }
 
         function updateMapData(points) {
@@ -972,24 +1093,21 @@
                 <div class="stat-box">
                     <h3>Antall satellitter</h3>
                     <p>${lastPoint.satelliteCount || 'N/A'}</p>
-                    <small>Minimum 4 satellitter kreves for posisjon. 6+ gir god nøyaktighet. 
-                    10+ gir optimal nøyaktighet. Under 6 kan indikere jamming.</small>
+                    <small>Indikerer hvor mange satellitter som er synlige. Minimum 4 satellitter kreves for posisjon. 6+ gir god nøyaktighet. 10+ gir optimal nøyaktighet. Under 6 kan indikere jamming.</small>
                 </div>
                 <div class="stat-box">
                     <h3>Signalkvalitet (SNR)</h3>
                     <p>${lastPoint.signalQuality?.toFixed(1) || 'N/A'}</p>
-                    <small>Signal-to-Noise Ratio. Over 40 er utmerket, 30-40 er god, 
-                    20-30 er moderat, under 20 er dårlig og kan indikere jamming.</small>
+                    <small>Signal-to-Noise Ratio. Over 40 er utmerket, 30-40 er god, 20-30 er moderat, under 20 er dårlig og kan indikere jamming.</small>
                 </div>
                 <div class="stat-box">
                     <h3>HDOP</h3>
                     <p>${lastPoint.hdop?.toFixed(2) || 'N/A'}</p>
-                    <small>Horizontal Dilution of Precision. Under 1 er ideelt, 1-2 er utmerket, 
-                    2-5 er god, 5-10 er moderat, over 10 er dårlig. Høy HDOP kan indikere jamming.</small>
+                    <small>Horizontal Dilution of Precision. Lavere er bedre. Under 1 er utmerket, 1-2 er god, 2-5 er moderat, over 5 er dårlig presisjon.</small>
                 </div>
                 <div class="stat-box ${jammingStatus.isJammed ? 'warning' : ''}">
                     <h3>Jamming-status</h3>
-                    <p>${jammingStatus.isJammed ? '🚨 Detektert' : '✅ Normal'}</p>
+                    <p>${jammingStatus.isJammed ? '⚠️ Mistenkt' : '✅ Normal'}</p>
                     <small>Indikerer om GPS-signalet blir aktivt forstyrret. Basert på kombinasjon av 
                     lav signalstyrke, høy HDOP og plutselig tap av satellitter.</small>
                 </div>
@@ -1000,6 +1118,27 @@
                     store posisjonshopp, urealistisk hastighet eller tidsfeil.</small>
                 </div>
             `;
+            
+            // Legg til eksport-knapper
+            const exportContainer = document.createElement('div');
+            exportContainer.className = 'export-container';
+            exportContainer.innerHTML = `
+                <h3>Eksporter data</h3>
+                <div class="export-buttons">
+                    <button id="exportCSV" class="export-button">CSV</button>
+                    <button id="exportJSON" class="export-button">JSON</button>
+                    <button id="exportPDF" class="export-button">PDF-rapport</button>
+                    <button id="exportGPX" class="export-button">GPX</button>
+                </div>
+            `;
+            
+            document.getElementById('stats').parentNode.appendChild(exportContainer);
+            
+            // Legg til event listeners for eksport-knapper
+            document.getElementById('exportCSV').addEventListener('click', () => exportToCSV(points));
+            document.getElementById('exportJSON').addEventListener('click', () => exportToJSON(points));
+            document.getElementById('exportPDF').addEventListener('click', () => exportToPDF(points));
+            document.getElementById('exportGPX').addEventListener('click', () => exportToGPX(points));
         }
 
         // Update file input label
@@ -1466,6 +1605,317 @@
                 document.getElementById('fileLabel').textContent = fileName;
             });
         });
+
+        // Legg til funksjon for å initialisere tidslinje
+        function initTimeline(points) {
+            const slider = document.getElementById('timelineSlider');
+            const playButton = document.getElementById('playButton');
+            const currentTimeDisplay = document.getElementById('currentTime');
+            const speedSelector = document.getElementById('playbackSpeed');
+            
+            let isPlaying = false;
+            let currentPointIndex = 0;
+            let animationFrameId = null;
+            let lastTimestamp = 0;
+            let playbackSpeed = parseFloat(speedSelector.value);
+            
+            // Opprett markør for nåværende posisjon
+            const currentPositionMarker = new mapboxgl.Marker({
+                color: '#FF4500',
+                scale: 1.2
+            }).setLngLat([points[0].lon, points[0].lat]).addTo(map);
+            
+            // Opprett popup for nåværende posisjon
+            const popup = new mapboxgl.Popup({
+                closeButton: false,
+                closeOnClick: false
+            });
+            
+            // Funksjon for å formatere tid
+            function formatTime(timeString) {
+                if (!timeString) return 'N/A';
+                try {
+                    const date = new Date(timeString);
+                    return date.toLocaleTimeString('no-NO');
+                } catch (e) {
+                    return timeString;
+                }
+            }
+            
+            // Funksjon for å oppdatere visningen basert på slider-posisjon
+            function updateTimelineDisplay() {
+                const index = parseInt(slider.value);
+                currentPointIndex = index;
+                
+                // Oppdater markør-posisjon
+                const point = points[index];
+                currentPositionMarker.setLngLat([point.lon, point.lat]);
+                
+                // Oppdater popup
+                popup.setLngLat([point.lon, point.lat])
+                    .setHTML(`
+                        <strong>Punkt ${index + 1}/${points.length}</strong><br>
+                        Tid: ${formatTime(point.time)}<br>
+                        Hastighet: ${point.speed ? point.speed.toFixed(1) + ' km/t' : 'N/A'}<br>
+                        ${point.is_anomaly ? '<span style="color: red">⚠️ Anomali</span>' : ''}
+                    `)
+                    .addTo(map);
+                
+                // Oppdater tidsdisplay
+                currentTimeDisplay.textContent = `Tid: ${formatTime(point.time)}`;
+                
+                // Sentrer kartet på nåværende punkt
+                map.easeTo({
+                    center: [point.lon, point.lat],
+                    duration: 500
+                });
+                
+                // Oppdater ruten med fargekoding for tilbakelagt og gjenværende
+                const coordinates = points.map(p => [p.lon, p.lat]);
+                
+                // Del ruten i to deler: tilbakelagt og gjenværende
+                if (map.getSource('route-completed')) {
+                    map.getSource('route-completed').setData({
+                        type: 'Feature',
+                        properties: {},
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: coordinates.slice(0, index + 1)
+                        }
+                    });
+                } else {
+                    map.addSource('route-completed', {
+                        type: 'geojson',
+                        data: {
+                            type: 'Feature',
+                            properties: {},
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: coordinates.slice(0, index + 1)
+                            }
+                        }
+                    });
+                    
+                    map.addLayer({
+                        id: 'route-completed-line',
+                        type: 'line',
+                        source: 'route-completed',
+                        layout: {
+                            'line-join': 'round',
+                            'line-cap': 'round'
+                        },
+                        paint: {
+                            'line-color': '#4CAF50',
+                            'line-width': 4,
+                            'line-opacity': 0.8
+                        }
+                    }, 'route-line');
+                }
+                
+                if (map.getSource('route-remaining')) {
+                    map.getSource('route-remaining').setData({
+                        type: 'Feature',
+                        properties: {},
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: coordinates.slice(index)
+                        }
+                    });
+                } else {
+                    map.addSource('route-remaining', {
+                        type: 'geojson',
+                        data: {
+                            type: 'Feature',
+                            properties: {},
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: coordinates.slice(index)
+                            }
+                        }
+                    });
+                    
+                    map.addLayer({
+                        id: 'route-remaining-line',
+                        type: 'line',
+                        source: 'route-remaining',
+                        layout: {
+                            'line-join': 'round',
+                            'line-cap': 'round'
+                        },
+                        paint: {
+                            'line-color': '#2196F3',
+                            'line-width': 3,
+                            'line-opacity': 0.5
+                        }
+                    });
+                }
+            }
+            
+            // Funksjon for å spille av animasjon
+            function playAnimation(timestamp) {
+                if (!lastTimestamp) lastTimestamp = timestamp;
+                
+                const elapsed = timestamp - lastTimestamp;
+                
+                // Beregn hvor mange punkter vi skal hoppe basert på hastighet
+                if (elapsed > (1000 / playbackSpeed)) {
+                    lastTimestamp = timestamp;
+                    currentPointIndex++;
+                    
+                    if (currentPointIndex >= points.length) {
+                        currentPointIndex = 0;
+                        isPlaying = false;
+                        playButton.innerHTML = '<span>▶️</span>';
+                        return;
+                    }
+                    
+                    slider.value = currentPointIndex;
+                    updateTimelineDisplay();
+                }
+                
+                if (isPlaying) {
+                    animationFrameId = requestAnimationFrame(playAnimation);
+                }
+            }
+            
+            // Håndter klikk på play-knapp
+            playButton.addEventListener('click', function() {
+                isPlaying = !isPlaying;
+                
+                if (isPlaying) {
+                    playButton.innerHTML = '<span>⏸️</span>';
+                    lastTimestamp = 0;
+                    animationFrameId = requestAnimationFrame(playAnimation);
+                } else {
+                    playButton.innerHTML = '<span>▶️</span>';
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                    }
+                }
+            });
+            
+            // Håndter endring av slider
+            slider.addEventListener('input', function() {
+                // Stopp avspilling hvis den er aktiv
+                if (isPlaying) {
+                    isPlaying = false;
+                    playButton.innerHTML = '<span>▶️</span>';
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                    }
+                }
+                
+                updateTimelineDisplay();
+            });
+            
+            // Håndter endring av hastighet
+            speedSelector.addEventListener('change', function() {
+                playbackSpeed = parseFloat(this.value);
+            });
+            
+            // Initialiser visningen
+            updateTimelineDisplay();
+        }
+
+        // Legg til eksport-funksjoner
+        function exportToCSV(points) {
+            // Lag CSV-header
+            const headers = ['Tidspunkt', 'Breddegrad', 'Lengdegrad', 'Høyde', 'Hastighet', 'Avvik', 'Satellitter', 'SNR', 'HDOP', 'Anomali'];
+            
+            // Lag CSV-innhold
+            let csvContent = headers.join(',') + '\n';
+            
+            points.forEach(point => {
+                const row = [
+                    point.time || '',
+                    point.lat.toFixed(6),
+                    point.lon.toFixed(6),
+                    point.altitude?.toFixed(1) || '',
+                    point.speed?.toFixed(1) || '',
+                    point.deviation?.toFixed(1) || '',
+                    point.satelliteCount || '',
+                    point.signalQuality?.toFixed(1) || '',
+                    point.hdop?.toFixed(2) || '',
+                    point.is_anomaly ? 'Ja' : 'Nei'
+                ];
+                
+                csvContent += row.join(',') + '\n';
+            });
+            
+            // Lag blob og last ned
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `gps_data_${new Date().toISOString().slice(0, 10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportToJSON(points) {
+            // Lag JSON-innhold
+            const jsonContent = JSON.stringify(points, null, 2);
+            
+            // Lag blob og last ned
+            const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `gps_data_${new Date().toISOString().slice(0, 10)}.json`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportToGPX(points) {
+            // Lag GPX-header
+            let gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS Tracker" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>GPS Tracker Export</name>
+    <time>${new Date().toISOString()}</time>
+  </metadata>
+  <trk>
+    <name>GPS Track</name>
+    <trkseg>
+`;
+            
+            // Legg til punkter
+            points.forEach(point => {
+                gpxContent += `      <trkpt lat="${point.lat}" lon="${point.lon}">
+        ${point.altitude ? `<ele>${point.altitude}</ele>` : ''}
+        ${point.time ? `<time>${new Date(point.time).toISOString()}</time>` : ''}
+        ${point.satelliteCount ? `<sat>${point.satelliteCount}</sat>` : ''}
+        ${point.is_anomaly ? '<type>anomaly</type>' : ''}
+      </trkpt>
+`;
+            });
+            
+            // Avslutt GPX
+            gpxContent += `    </trkseg>
+  </trk>
+</gpx>`;
+            
+            // Lag blob og last ned
+            const blob = new Blob([gpxContent], { type: 'application/gpx+xml;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `gps_track_${new Date().toISOString().slice(0, 10)}.gpx`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportToPDF(points) {
+            alert('PDF-eksport krever en ekstern bibliotek som jsPDF. Dette vil bli implementert senere.');
+            // Implementasjon av PDF-eksport krever et bibliotek som jsPDF
+            // Dette er mer komplekst og kan implementeres senere
+        }
     </script>
 </body>
 </html> 
