@@ -727,19 +727,26 @@
         }
 
         function updateMap(points) {
-            clearMap();
-            
             if (points.length === 0) {
                 console.error('Ingen gyldige koordinater å vise på kartet');
                 return;
             }
             
+            // Sjekk om kartet er initialisert
+            if (!map) {
+                console.error('Kart ikke initialisert');
+                return;
+            }
+            
             // Sjekk om kartet er lastet
-            if (!map.loaded && !map.isStyleLoaded()) {
+            if (!map.isStyleLoaded()) {
+                // Vent til kartet er lastet
                 map.once('load', function() {
+                    clearMap();
                     updateMapData(points);
                 });
             } else {
+                clearMap();
                 updateMapData(points);
             }
         }
