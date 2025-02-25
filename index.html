@@ -12,6 +12,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.1.0/dist/chartjs-plugin-annotation.min.js"></script>
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <style>
         :root {
             --primary: #2196F3;
@@ -1922,9 +1925,196 @@
         }
 
         function exportToPDF(points) {
-            alert('PDF-eksport krever en ekstern bibliotek som jsPDF. Dette vil bli implementert senere.');
-            // Implementasjon av PDF-eksport krever et bibliotek som jsPDF
-            // Dette er mer komplekst og kan implementeres senere
+            try {
+                // Opprett ny PDF med A4-størrelse
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+                
+                // Legg til tittel
+                doc.setFontSize(20);
+                doc.text('GPS Tracker Rapport', 105, 15, { align: 'center' });
+                
+                // Legg til dato
+                doc.setFontSize(10);
+                doc.text(`Generert: ${new Date().toLocaleString('no-NO')}`, 105, 22, { align: 'center' });
+                
+                // Legg til sammendrag
+                doc.setFontSize(14);
+                doc.text('Sammendrag', 14, 30);
+                
+                // Beregn statistikk
+                const anomalies = points.filter(p => p.is_anomaly).length;
+                const avgSpeed = points.reduce((sum, p) => sum + (p.speed || 0), 0) / points.length;
+                const maxSpeed = Math.max(...points.map(p => p.speed || 0));
+                const distance = calculateTotalDistance(points);
+                const duration = calculateDuration(points);
+                
+                // Legg til statistikk-tabell
+                doc.autoTable({
+                    startY: 35,
+                    head: [['Statistikk', 'Verdi']],
+                    body: [
+                        ['Totalt antall punkter', points.length],
+                        ['Antall anomalier', anomalies],
+                        ['Gjennomsnittshastighet', `${avgSpeed.toFixed(1)} km/t`],
+                        ['Maksimal hastighet', `${maxSpeed.toFixed(1)} km/t`],
+                        ['Total distanse', `${distance.toFixed(2)} km`],
+                        ['Varighet', formatDuration(duration)]
+                    ],
+                    theme: 'grid',
+                    headStyles: { fillColor: [33, 150, 243] },
+                    margin: { top: 35 }
+                });
+                
+                // Legg til kart
+                doc.addPage();
+                doc.setFontSize(14);
+                doc.text('Kart', 14, 15);
+                
+                // Bruk html2canvas for å ta skjermbilde av kartet
+                return html2canvas(document.getElementById('map'), {
+                    useCORS: true,
+                    allowTaint: true,
+                    scale: 1
+                }).then(canvas => {
+                    // Legg til kartet i PDF
+                    const imgData = canvas.toDataURL('image/png');
+                    const imgWidth = doc.internal.pageSize.getWidth() - 28;
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    
+                    doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
+                    
+                    // Legg til graf
+                    doc.addPage();
+                    doc.setFontSize(14);
+                    doc.text('Hastighet og avvik', 14, 15);
+                    
+                    // Ta skjermbilde av grafen
+                    return html2canvas(document.getElementById('speedChart').parentNode, {
+                        useCORS: true,
+                        allowTaint: true,
+                        scale: 1
+                    });
+                }).then(canvas => {
+                    // Legg til grafen i PDF
+                    const imgData = canvas.toDataURL('image/png');
+                    const imgWidth = doc.internal.pageSize.getWidth() - 28;
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    
+                    doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
+                    
+                    // Legg til datatabell
+                    doc.addPage();
+                    doc.setFontSize(14);
+                    doc.text('GPS-data', 14, 15);
+                    
+                    // Begrens antall rader for å unngå for stor PDF
+                    const maxRows = 100;
+                    const displayPoints = points.length > maxRows ? 
+                        [...points.slice(0, maxRows/2), ...points.slice(points.length - maxRows/2)] : 
+                        points;
+                    
+                    // Legg til merknad hvis vi har begrenset antall rader
+                    if (points.length > maxRows) {
+                        doc.setFontSize(10);
+                        doc.text(`* Viser kun ${maxRows} av ${points.length} punkter (første og siste ${maxRows/2} punkter)`, 14, 20);
+                    }
+                    
+                    // Lag datatabell
+                    const tableData = displayPoints.map((point, index) => [
+                        index + 1,
+                        formatTime(point.time),
+                        point.lat.toFixed(6),
+                        point.lon.toFixed(6),
+                        point.speed ? point.speed.toFixed(1) + ' km/t' : 'N/A',
+                        point.deviation ? point.deviation.toFixed(1) + ' m' : 'N/A',
+                        point.is_anomaly ? 'Ja' : 'Nei'
+                    ]);
+                    
+                    doc.autoTable({
+                        startY: points.length > maxRows ? 25 : 20,
+                        head: [['#', 'Tid', 'Breddegrad', 'Lengdegrad', 'Hastighet', 'Avvik', 'Anomali']],
+                        body: tableData,
+                        theme: 'grid',
+                        headStyles: { fillColor: [33, 150, 243] },
+                        margin: { top: 25 },
+                        styles: { fontSize: 8 },
+                        columnStyles: {
+                            0: { cellWidth: 10 },
+                            1: { cellWidth: 30 },
+                            2: { cellWidth: 25 },
+                            3: { cellWidth: 25 },
+                            4: { cellWidth: 20 },
+                            5: { cellWidth: 20 },
+                            6: { cellWidth: 15 }
+                        }
+                    });
+                    
+                    // Legg til sidetall
+                    const pageCount = doc.internal.getNumberOfPages();
+                    for (let i = 1; i <= pageCount; i++) {
+                        doc.setPage(i);
+                        doc.setFontSize(10);
+                        doc.text(`Side ${i} av ${pageCount}`, 105, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+                    }
+                    
+                    // Lagre PDF
+                    doc.save(`gps_rapport_${new Date().toISOString().slice(0, 10)}.pdf`);
+                });
+            } catch (e) {
+                console.error('Feil ved generering av PDF:', e);
+                alert('Kunne ikke generere PDF: ' + e.message);
+            }
+        }
+
+        // Hjelpefunksjoner for PDF-eksport
+        function calculateTotalDistance(points) {
+            let totalDistance = 0;
+            
+            for (let i = 1; i < points.length; i++) {
+                const p1 = points[i-1];
+                const p2 = points[i];
+                
+                // Haversine-formel for å beregne avstand mellom to koordinater
+                const R = 6371; // Jordens radius i km
+                const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+                const dLon = (p2.lon - p1.lon) * Math.PI / 180;
+                const a = 
+                    Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * 
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                const distance = R * c;
+                
+                totalDistance += distance;
+            }
+            
+            return totalDistance;
+        }
+
+        function calculateDuration(points) {
+            if (!points.length || !points[0].time || !points[points.length-1].time) {
+                return 0;
+            }
+            
+            const startTime = new Date(points[0].time);
+            const endTime = new Date(points[points.length-1].time);
+            
+            return (endTime - startTime) / 1000; // Varighet i sekunder
+        }
+
+        function formatDuration(seconds) {
+            if (seconds === 0) return 'Ukjent';
+            
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
     </script>
 </body>
