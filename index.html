@@ -1028,39 +1028,30 @@
         }
 
         function updateMapData(points) {
-            // Opprett GeoJSON for ruten
-            const routeData = {
-                type: 'Feature',
-                properties: {},
-                geometry: {
-                    type: 'LineString',
-                    coordinates: points.map(point => [point.lon, point.lat])
-                }
-            };
+            // Opprett en tom array for koordinater
+            const coordinates = [];
             
-            // Legg til ruten som kilde
-            map.getSource('route').setData(routeData);
+            // Opprett en bounding box for å zoome til alle punkter
+            const bounds = new mapboxgl.LngLatBounds();
             
             // Legg til markører for hvert punkt
             points.forEach((point, index) => {
-                // Bestem farge basert på punkttype
-                const color = point.is_anomaly ? '#f44336' : // Rød for anomalier
-                              index === 0 ? '#4CAF50' : // Grønn for start
-                              index === points.length - 1 ? '#FFA000' : // Oransje for slutt
-                              '#2196F3'; // Blå for normale punkter
+                const coord = [point.lon, point.lat];
+                coordinates.push(coord);
                 
-                // Opprett popup
-                const popup = new mapboxgl.Popup({ offset: 25 })
-                    .setHTML(`
-                        <strong>${point.is_anomaly ? 'ANOMALI' : 'Normalt punkt'}</strong><br>
-                        Punkt ${index + 1} av ${points.length}<br>
-                        Tid: ${point.time}<br>
-                        Lat: ${point.lat.toFixed(6)}<br>
-                        Lon: ${point.lon.toFixed(6)}
-                        ${point.altitude ? '<br>Høyde: ' + point.altitude.toFixed(1) + 'm' : ''}
-                        ${point.satelliteCount ? '<br>Satellitter: ' + point.satelliteCount : ''}
-                        ${point.signalQuality ? '<br>SNR: ' + point.signalQuality.toFixed(1) : ''}
-                    `);
+                // Utvid bounds med dette punktet
+                bounds.extend(coord);
+                
+                // Bestem farge basert på om punktet er en anomali
+                let color = '#2196F3'; // Standard blå
+                
+                if (point.is_anomaly) {
+                    color = '#f44336'; // Rød for anomalier
+                } else if (index === 0) {
+                    color = '#4CAF50'; // Grønn for startpunkt
+                } else if (index === points.length - 1) {
+                    color = '#FF9800'; // Oransje for sluttpunkt
+                }
                 
                 // Opprett markør-element
                 const el = document.createElement('div');
@@ -1071,24 +1062,48 @@
                 el.style.borderRadius = '50%';
                 el.style.border = '2px solid white';
                 
-                // Legg til markør
+                // Opprett popup med informasjon
+                const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+                    <strong>Punkt ${index + 1}/${points.length}</strong><br>
+                    Tid: ${formatTime(point.time)}<br>
+                    Posisjon: ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}<br>
+                    Høyde: ${point.altitude ? point.altitude.toFixed(1) + ' m' : 'N/A'}<br>
+                    Hastighet: ${point.speed ? point.speed.toFixed(1) + ' km/t' : 'N/A'}<br>
+                    ${point.satelliteCount ? 'Satellitter: ' + point.satelliteCount + '<br>' : ''}
+                    ${point.signalQuality ? 'SNR: ' + point.signalQuality.toFixed(1) + '<br>' : ''}
+                    ${point.hdop ? 'HDOP: ' + point.hdop.toFixed(2) + '<br>' : ''}
+                    ${point.is_anomaly ? '<span style="color: red">⚠️ Anomali</span>' : ''}
+                `);
+                
+                // Opprett markør
                 const marker = new mapboxgl.Marker(el)
-                    .setLngLat([point.lon, point.lat])
+                    .setLngLat(coord)
                     .setPopup(popup)
                     .addTo(map);
                 
+                // Legg til markøren i array for senere referanse
                 markers.push(marker);
             });
             
-            // Zoom til alle punktene
-            const bounds = new mapboxgl.LngLatBounds();
-            points.forEach(point => {
-                bounds.extend([point.lon, point.lat]);
-            });
+            // Oppdater ruten på kartet
+            if (map.getSource('route')) {
+                map.getSource('route').setData({
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: coordinates
+                    }
+                });
+            }
             
-            map.fitBounds(bounds, {
-                padding: 50
-            });
+            // Zoom til alle punkter med padding
+            if (coordinates.length > 0) {
+                map.fitBounds(bounds, {
+                    padding: 50,
+                    maxZoom: 16 // Begrens maksimalt zoom-nivå
+                });
+            }
         }
 
         function updateStats(points) {
@@ -1978,158 +1993,196 @@
                 doc.addPage();
                 doc.setFontSize(14);
                 doc.text('Kart', 14, 15);
-                
-                // Forbered kartet for skjermbilde
-                const mapElement = document.getElementById('map');
-                
-                // Bruk html2canvas med forbedrede innstillinger
-                html2canvas(mapElement, {
-                    useCORS: true,
-                    allowTaint: true,
-                    foreignObjectRendering: false,
-                    scale: 2, // Høyere oppløsning
-                    logging: true,
-                    backgroundColor: '#ffffff',
-                    onclone: function(clonedDoc) {
-                        // Manipuler den klonede DOM-en for å sikre at kartet vises riktig
-                        const clonedMap = clonedDoc.getElementById('map');
-                        if (clonedMap) {
-                            clonedMap.style.width = '800px';
-                            clonedMap.style.height = '600px';
-                            clonedMap.style.position = 'relative';
-                            clonedMap.style.overflow = 'visible';
-                        }
-                    }
-                }).then(canvas => {
-                    // Legg til kartet i PDF
-                    try {
-                        const imgData = canvas.toDataURL('image/png');
-                        const imgWidth = doc.internal.pageSize.getWidth() - 28;
-                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                        
-                        doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
-                        
-                        // Legg til graf
-                        doc.addPage();
-                        doc.setFontSize(14);
-                        doc.text('Hastighet og avvik', 14, 15);
-                        
-                        // Forbered grafen for skjermbilde
-                        const chartElement = document.getElementById('speedChart').parentNode;
-                        
-                        // Ta skjermbilde av grafen med forbedrede innstillinger
-                        return html2canvas(chartElement, {
-                            useCORS: true,
-                            allowTaint: true,
-                            scale: 2,
-                            backgroundColor: '#ffffff',
-                            logging: true
-                        });
-                    } catch (e) {
-                        console.error('Feil ved behandling av kartbilde:', e);
-                        // Fortsett uten kartbilde
-                        doc.text('Kunne ikke generere kartbilde: ' + e.message, 14, 30);
-                        
-                        // Legg til graf
-                        doc.addPage();
-                        doc.setFontSize(14);
-                        doc.text('Hastighet og avvik', 14, 15);
-                        
-                        // Forbered grafen for skjermbilde
-                        const chartElement = document.getElementById('speedChart').parentNode;
-                        
-                        // Ta skjermbilde av grafen med forbedrede innstillinger
-                        return html2canvas(chartElement, {
-                            useCORS: true,
-                            allowTaint: true,
-                            scale: 2,
-                            backgroundColor: '#ffffff',
-                            logging: true
-                        });
-                    }
-                }).then(canvas => {
-                    // Legg til grafen i PDF
-                    try {
-                        const imgData = canvas.toDataURL('image/png');
-                        const imgWidth = doc.internal.pageSize.getWidth() - 28;
-                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                        
-                        doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
-                    } catch (e) {
-                        console.error('Feil ved behandling av grafbilde:', e);
-                        // Fortsett uten grafbilde
-                        doc.text('Kunne ikke generere grafbilde: ' + e.message, 14, 30);
-                    }
+
+                // Bruk Mapbox Static API for å generere et statisk kartbilde
+                try {
+                    // Beregn senterpunkt og zoom
+                    const bounds = new mapboxgl.LngLatBounds();
+                    points.forEach(point => {
+                        bounds.extend([point.lon, point.lat]);
+                    });
                     
-                    // Legg til datatabell
-                    doc.addPage();
-                    doc.setFontSize(14);
-                    doc.text('GPS-data', 14, 15);
+                    const center = bounds.getCenter();
                     
-                    // Begrens antall rader for å unngå for stor PDF
-                    const maxRows = 100;
-                    const displayPoints = points.length > maxRows ? 
-                        [...points.slice(0, maxRows/2), ...points.slice(points.length - maxRows/2)] : 
-                        points;
-                    
-                    // Legg til merknad hvis vi har begrenset antall rader
-                    if (points.length > maxRows) {
-                        doc.setFontSize(10);
-                        doc.text(`* Viser kun ${maxRows} av ${points.length} punkter (første og siste ${maxRows/2} punkter)`, 14, 20);
-                    }
-                    
-                    // Lag datatabell
-                    const tableData = displayPoints.map((point, index) => [
-                        index + 1,
-                        formatTime(point.time),
-                        point.lat.toFixed(6),
-                        point.lon.toFixed(6),
-                        point.speed ? point.speed.toFixed(1) + ' km/t' : 'N/A',
-                        point.deviation ? point.deviation.toFixed(1) + ' m' : 'N/A',
-                        point.is_anomaly ? 'Ja' : 'Nei'
-                    ]);
-                    
-                    doc.autoTable({
-                        startY: points.length > maxRows ? 25 : 20,
-                        head: [['#', 'Tid', 'Breddegrad', 'Lengdegrad', 'Hastighet', 'Avvik', 'Anomali']],
-                        body: tableData,
-                        theme: 'grid',
-                        headStyles: { fillColor: [33, 150, 243] },
-                        margin: { top: 25 },
-                        styles: { fontSize: 8 },
-                        columnStyles: {
-                            0: { cellWidth: 10 },
-                            1: { cellWidth: 30 },
-                            2: { cellWidth: 25 },
-                            3: { cellWidth: 25 },
-                            4: { cellWidth: 20 },
-                            5: { cellWidth: 20 },
-                            6: { cellWidth: 15 }
+                    // Opprett markører for alle punkter
+                    let markers = '';
+                    points.forEach((point, index) => {
+                        // Begrens antall markører for å unngå for lange URL-er
+                        if (index % Math.max(1, Math.floor(points.length / 100)) === 0) {
+                            const color = point.is_anomaly ? 'f44336' : (index === 0 ? '4CAF50' : (index === points.length - 1 ? 'FF9800' : '2196F3'));
+                            markers += `pin-s+${color}(${point.lon},${point.lat}),`;
                         }
                     });
                     
-                    // Legg til sidetall
-                    const pageCount = doc.internal.getNumberOfPages();
-                    for (let i = 1; i <= pageCount; i++) {
-                        doc.setPage(i);
-                        doc.setFontSize(10);
-                        doc.text(`Side ${i} av ${pageCount}`, 105, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+                    // Fjern siste komma
+                    if (markers.endsWith(',')) {
+                        markers = markers.slice(0, -1);
                     }
                     
-                    // Lagre PDF
-                    doc.save(`gps_rapport_${new Date().toISOString().slice(0, 10)}.pdf`);
+                    // Generer statisk kart-URL
+                    const mapWidth = 800;
+                    const mapHeight = 600;
+                    const zoom = Math.min(16, map.getZoom()); // Begrens zoom for å unngå for detaljerte kart
                     
-                    // Skjul laster-indikator
-                    loading.style.display = 'none';
-                }).catch(e => {
-                    console.error('Feil ved generering av PDF:', e);
-                    alert('Kunne ikke generere PDF: ' + e.message);
-                    loading.style.display = 'none';
+                    // Opprett rute-linje
+                    let path = '';
+                    if (points.length > 1) {
+                        path = 'path-3+2196F3-0.8(';
+                        
+                        // Begrens antall punkter for å unngå for lange URL-er
+                        const maxPathPoints = 100;
+                        const step = Math.max(1, Math.floor(points.length / maxPathPoints));
+                        
+                        for (let i = 0; i < points.length; i += step) {
+                            path += `${points[i].lon},${points[i].lat},`;
+                        }
+                        
+                        // Legg til siste punkt hvis det ikke allerede er inkludert
+                        if ((points.length - 1) % step !== 0) {
+                            path += `${points[points.length - 1].lon},${points[points.length - 1].lat},`;
+                        }
+                        
+                        // Fjern siste komma og lukk parentesen
+                        path = path.slice(0, -1) + ')';
+                    }
+                    
+                    // Kombiner markører og rute
+                    let overlay = '';
+                    if (markers && path) {
+                        overlay = markers + ',' + path;
+                    } else if (markers) {
+                        overlay = markers;
+                    } else if (path) {
+                        overlay = path;
+                    }
+                    
+                    // Generer statisk kart-URL
+                    const staticMapUrl = `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/${
+                        overlay ? overlay + '/' : ''
+                    }${center.lng},${center.lat},${zoom},0/${mapWidth}x${mapHeight}?access_token=${mapboxgl.accessToken}`;
+                    
+                    // Last ned kartbildet
+                    return fetch(staticMapUrl)
+                        .then(response => response.blob())
+                        .then(blob => {
+                            return new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => resolve(reader.result);
+                                reader.onerror = reject;
+                                reader.readAsDataURL(blob);
+                            });
+                        })
+                        .then(imgData => {
+                            // Legg til kartbildet i PDF
+                            const imgWidth = doc.internal.pageSize.getWidth() - 28;
+                            const imgHeight = (mapHeight * imgWidth) / mapWidth;
+                            
+                            doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
+                            
+                            // Legg til graf
+                            doc.addPage();
+                            doc.setFontSize(14);
+                            doc.text('Hastighet og avvik', 14, 15);
+                            
+                            // Forbered grafen for skjermbilde
+                            const chartElement = document.getElementById('speedChart').parentNode;
+                            
+                            // Ta skjermbilde av grafen med forbedrede innstillinger
+                            return html2canvas(chartElement, {
+                                useCORS: true,
+                                allowTaint: true,
+                                scale: 2,
+                                backgroundColor: '#ffffff',
+                                logging: true
+                            });
+                        });
+                } catch (e) {
+                    console.error('Feil ved generering av kartbilde:', e);
+                    // Fortsett uten kartbilde
+                    doc.text('Kunne ikke generere kartbilde: ' + e.message, 14, 30);
+                    
+                    // Legg til graf
+                    doc.addPage();
+                    doc.setFontSize(14);
+                    doc.text('Hastighet og avvik', 14, 15);
+                    
+                    // Forbered grafen for skjermbilde
+                    const chartElement = document.getElementById('speedChart').parentNode;
+                    
+                    // Ta skjermbilde av grafen med forbedrede innstillinger
+                    return html2canvas(chartElement, {
+                        useCORS: true,
+                        allowTaint: true,
+                        scale: 2,
+                        backgroundColor: '#ffffff',
+                        logging: true
+                    });
+                }
+                
+                // Legg til datatabell
+                doc.addPage();
+                doc.setFontSize(14);
+                doc.text('GPS-data', 14, 15);
+                
+                // Begrens antall rader for å unngå for stor PDF
+                const maxRows = 100;
+                const displayPoints = points.length > maxRows ? 
+                    [...points.slice(0, maxRows/2), ...points.slice(points.length - maxRows/2)] : 
+                    points;
+                
+                // Legg til merknad hvis vi har begrenset antall rader
+                if (points.length > maxRows) {
+                    doc.setFontSize(10);
+                    doc.text(`* Viser kun ${maxRows} av ${points.length} punkter (første og siste ${maxRows/2} punkter)`, 14, 20);
+                }
+                
+                // Lag datatabell
+                const tableData = displayPoints.map((point, index) => [
+                    index + 1,
+                    formatTime(point.time),
+                    point.lat.toFixed(6),
+                    point.lon.toFixed(6),
+                    point.speed ? point.speed.toFixed(1) + ' km/t' : 'N/A',
+                    point.deviation ? point.deviation.toFixed(1) + ' m' : 'N/A',
+                    point.is_anomaly ? 'Ja' : 'Nei'
+                ]);
+                
+                doc.autoTable({
+                    startY: points.length > maxRows ? 25 : 20,
+                    head: [['#', 'Tid', 'Breddegrad', 'Lengdegrad', 'Hastighet', 'Avvik', 'Anomali']],
+                    body: tableData,
+                    theme: 'grid',
+                    headStyles: { fillColor: [33, 150, 243] },
+                    margin: { top: 25 },
+                    styles: { fontSize: 8 },
+                    columnStyles: {
+                        0: { cellWidth: 10 },
+                        1: { cellWidth: 30 },
+                        2: { cellWidth: 25 },
+                        3: { cellWidth: 25 },
+                        4: { cellWidth: 20 },
+                        5: { cellWidth: 20 },
+                        6: { cellWidth: 15 }
+                    }
                 });
+                
+                // Legg til sidetall
+                const pageCount = doc.internal.getNumberOfPages();
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(10);
+                    doc.text(`Side ${i} av ${pageCount}`, 105, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+                }
+                
+                // Lagre PDF
+                doc.save(`gps_rapport_${new Date().toISOString().slice(0, 10)}.pdf`);
+                
+                // Skjul laster-indikator
+                loading.style.display = 'none';
             } catch (e) {
                 console.error('Feil ved generering av PDF:', e);
                 alert('Kunne ikke generere PDF: ' + e.message);
-                document.getElementById('loading').style.display = 'none';
+                loading.style.display = 'none';
             }
         }
 
