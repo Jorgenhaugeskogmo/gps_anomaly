@@ -1926,6 +1926,10 @@
 
         function exportToPDF(points) {
             try {
+                // Vis laster-indikator
+                const loading = document.getElementById('loading');
+                loading.style.display = 'block';
+                
                 // Opprett ny PDF med A4-størrelse
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF({
@@ -1975,37 +1979,87 @@
                 doc.setFontSize(14);
                 doc.text('Kart', 14, 15);
                 
-                // Bruk html2canvas for å ta skjermbilde av kartet
-                return html2canvas(document.getElementById('map'), {
+                // Forbered kartet for skjermbilde
+                const mapElement = document.getElementById('map');
+                
+                // Bruk html2canvas med forbedrede innstillinger
+                html2canvas(mapElement, {
                     useCORS: true,
                     allowTaint: true,
-                    scale: 1
+                    foreignObjectRendering: false,
+                    scale: 2, // Høyere oppløsning
+                    logging: true,
+                    backgroundColor: '#ffffff',
+                    onclone: function(clonedDoc) {
+                        // Manipuler den klonede DOM-en for å sikre at kartet vises riktig
+                        const clonedMap = clonedDoc.getElementById('map');
+                        if (clonedMap) {
+                            clonedMap.style.width = '800px';
+                            clonedMap.style.height = '600px';
+                            clonedMap.style.position = 'relative';
+                            clonedMap.style.overflow = 'visible';
+                        }
+                    }
                 }).then(canvas => {
                     // Legg til kartet i PDF
-                    const imgData = canvas.toDataURL('image/png');
-                    const imgWidth = doc.internal.pageSize.getWidth() - 28;
-                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                    
-                    doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
-                    
-                    // Legg til graf
-                    doc.addPage();
-                    doc.setFontSize(14);
-                    doc.text('Hastighet og avvik', 14, 15);
-                    
-                    // Ta skjermbilde av grafen
-                    return html2canvas(document.getElementById('speedChart').parentNode, {
-                        useCORS: true,
-                        allowTaint: true,
-                        scale: 1
-                    });
+                    try {
+                        const imgData = canvas.toDataURL('image/png');
+                        const imgWidth = doc.internal.pageSize.getWidth() - 28;
+                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                        
+                        doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
+                        
+                        // Legg til graf
+                        doc.addPage();
+                        doc.setFontSize(14);
+                        doc.text('Hastighet og avvik', 14, 15);
+                        
+                        // Forbered grafen for skjermbilde
+                        const chartElement = document.getElementById('speedChart').parentNode;
+                        
+                        // Ta skjermbilde av grafen med forbedrede innstillinger
+                        return html2canvas(chartElement, {
+                            useCORS: true,
+                            allowTaint: true,
+                            scale: 2,
+                            backgroundColor: '#ffffff',
+                            logging: true
+                        });
+                    } catch (e) {
+                        console.error('Feil ved behandling av kartbilde:', e);
+                        // Fortsett uten kartbilde
+                        doc.text('Kunne ikke generere kartbilde: ' + e.message, 14, 30);
+                        
+                        // Legg til graf
+                        doc.addPage();
+                        doc.setFontSize(14);
+                        doc.text('Hastighet og avvik', 14, 15);
+                        
+                        // Forbered grafen for skjermbilde
+                        const chartElement = document.getElementById('speedChart').parentNode;
+                        
+                        // Ta skjermbilde av grafen med forbedrede innstillinger
+                        return html2canvas(chartElement, {
+                            useCORS: true,
+                            allowTaint: true,
+                            scale: 2,
+                            backgroundColor: '#ffffff',
+                            logging: true
+                        });
+                    }
                 }).then(canvas => {
                     // Legg til grafen i PDF
-                    const imgData = canvas.toDataURL('image/png');
-                    const imgWidth = doc.internal.pageSize.getWidth() - 28;
-                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                    
-                    doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
+                    try {
+                        const imgData = canvas.toDataURL('image/png');
+                        const imgWidth = doc.internal.pageSize.getWidth() - 28;
+                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                        
+                        doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
+                    } catch (e) {
+                        console.error('Feil ved behandling av grafbilde:', e);
+                        // Fortsett uten grafbilde
+                        doc.text('Kunne ikke generere grafbilde: ' + e.message, 14, 30);
+                    }
                     
                     // Legg til datatabell
                     doc.addPage();
@@ -2064,10 +2118,18 @@
                     
                     // Lagre PDF
                     doc.save(`gps_rapport_${new Date().toISOString().slice(0, 10)}.pdf`);
+                    
+                    // Skjul laster-indikator
+                    loading.style.display = 'none';
+                }).catch(e => {
+                    console.error('Feil ved generering av PDF:', e);
+                    alert('Kunne ikke generere PDF: ' + e.message);
+                    loading.style.display = 'none';
                 });
             } catch (e) {
                 console.error('Feil ved generering av PDF:', e);
                 alert('Kunne ikke generere PDF: ' + e.message);
+                document.getElementById('loading').style.display = 'none';
             }
         }
 
